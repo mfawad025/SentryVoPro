@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Preview — SentryVo</title>
+<meta name="description" content="Preview of the SentryVo case dashboard — scans, takedowns and recovered revenue at a glance.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="dash-shell">
+  <aside class="dash-sidebar">
+    <a href="index.html" class="logo">
+      <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
+    </a>
+    <a href="#" class="dash-link active">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9 H21" stroke="currentColor" stroke-width="2"/></svg>
+      Overview
+    </a>
+    <a href="#" class="dash-link">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21 L16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Scans
+    </a>
+    <a href="#" class="dash-link">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="currentColor" stroke-width="2"/></svg>
+      Takedowns
+    </a>
+    <a href="#" class="dash-link">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21 C4 16 8 14 12 14 C16 14 20 16 20 21" stroke="currentColor" stroke-width="2"/></svg>
+      Brand Profile
+    </a>
+    <a href="#" class="dash-link">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 21 C4 16 8 14 12 14 C16 14 20 16 20 21" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg>
+      Billing
+    </a>
+    <a href="#" class="dash-link">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19 12 a7 7 0 0 0-.1-1.2 l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12" stroke="currentColor" stroke-width="1.5"/></svg>
+      Settings
+    </a>
+    <div style="margin-top:auto; padding:14px; background:var(--ink-3); border-radius:10px; font-size:.82rem; color:var(--text-mid);">
+      This is a static design preview — no real account data.
+    </div>
+  </aside>
+
+  <main class="dash-main">
+    <div class="dash-topbar">
+      <div>
+        <span class="eyebrow">Case: astro_domina</span>
+        <h2 style="margin:6px 0 0;">Overview</h2>
+      </div>
+      <a href="index.html" class="btn">Back to Site</a>
+    </div>
+
+    <div class="dash-stats">
+      <div class="dash-stat">
+        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Leaks Found</span></div>
+        <b>1,284</b>
+        <span class="delta">+38 this week</span>
+      </div>
+      <div class="dash-stat">
+        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Takedowns Sent</span></div>
+        <b>1,206</b>
+        <span class="delta">+31 this week</span>
+      </div>
+      <div class="dash-stat">
+        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Confirmed Removed</span></div>
+        <b>1,041</b>
+        <span class="delta">86% removal rate</span>
+      </div>
+      <div class="dash-stat">
+        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Est. Revenue Recovered</span></div>
+        <b>$[X],XXX</b>
+        <span class="delta">Illustrative figure</span>
+      </div>
+    </div>
+
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <h3 style="margin:0;">Leaks Found — Last 7 Days</h3>
+        <span style="font-size:.8rem; color:var(--text-low);">Illustrative chart</span>
+      </div>
+      <div class="bar-chart">
+        <div class="bar" style="height:55%;"><span>Mon</span></div>
+        <div class="bar" style="height:70%;"><span>Tue</span></div>
+        <div class="bar" style="height:40%;"><span>Wed</span></div>
+        <div class="bar" style="height:85%;"><span>Thu</span></div>
+        <div class="bar" style="height:60%;"><span>Fri</span></div>
+        <div class="bar" style="height:95%;"><span>Sat</span></div>
+        <div class="bar" style="height:50%;"><span>Sun</span></div>
+      </div>
+    </div>
+
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <h3 style="margin:0;">Recent Activity</h3>
+        <span style="font-size:.8rem; color:var(--text-low);">Illustrative data</span>
+      </div>
+      <table class="dash-table">
+        <thead>
+          <tr><th>Platform</th><th>URL</th><th>Status</th><th>Date</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Reddit</td>
+            <td>reddit.com/r/leaks/astro_domina</td>
+            <td><span class="badge sent">DMCA Sent</span></td>
+            <td>Jul 22, 2026</td>
+          </tr>
+          <tr>
+            <td>Telegram</td>
+            <td>t.me/leaked_creators/4829</td>
+            <td><span class="badge removed">Removed</span></td>
+            <td>Jul 21, 2026</td>
+          </tr>
+          <tr>
+            <td>Google Images</td>
+            <td>12 results delisted</td>
+            <td><span class="badge removed">Removed</span></td>
+            <td>Jul 21, 2026</td>
+          </tr>
+          <tr>
+            <td>Tube Site</td>
+            <td>pirate-tube.xyz/leaks/astro</td>
+            <td><span class="badge found">Leak Found</span></td>
+            <td>Jul 20, 2026</td>
+          </tr>
+          <tr>
+            <td>X (Twitter)</td>
+            <td>x.com/leakaccount123</td>
+            <td><span class="badge sent">DMCA Sent</span></td>
+            <td>Jul 19, 2026</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <h3 style="margin:0;">Brand Profile</h3>
+        <a href="#" class="btn" style="padding:8px 16px; font-size:.8rem;">Edit</a>
+      </div>
+      <p style="margin:0; font-size:.9rem;">Stage names: astro_domina, astroo_domina · Linked accounts: OnlyFans, Fansly, X, Instagram · Detection methods: facial recognition, watermark matching, username tracking</p>
+    </div>
+  </main>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

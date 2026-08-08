@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SentryVo — AI Leak Detection & DMCA Takedowns for Creators</title>
+<meta name="description" content="SentryVo scans the web around the clock for stolen or leaked content, files DMCA takedowns automatically, and helps creators protect their brand and revenue.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="marquee">
+  <div class="marquee-track">
+    <span>SENTRYVO — AI-POWERED LEAK DETECTION</span>
+    <span>AUTOMATED DMCA TAKEDOWNS</span>
+    <span>BUILT FOR CREATORS</span>
+    <span>SENTRYVO — AI-POWERED LEAK DETECTION</span>
+    <span>AUTOMATED DMCA TAKEDOWNS</span>
+    <span>BUILT FOR CREATORS</span>
+  </div>
+</div>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="logo">
+      <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
+    </a>
+    <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">MENU</button>
+    <nav class="nav-links">
+      <a href="index.html#how-it-works">How It Works</a>
+      <a href="index.html#features">Features</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="login.html">Login</a>
+    </nav>
+    <a href="register.html" class="nav-cta">Get Protected</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">AI Brand Protection</span>
+      <h1>Stop leaks.<br>Protect your <span class="accent">brand</span> and revenue.</h1>
+      <p class="lede">SentryVo scans the web around the clock, finds stolen or leaked content, and files DMCA takedowns automatically — so fans find the real you, not a pirated copy.</p>
+      <div class="hero-actions">
+        <a href="#pricing" class="btn btn-primary btn-lg">Get Protected</a>
+        <a href="#how-it-works" class="btn btn-lg">See How It Works</a>
+      </div>
+
+      <div class="free-scan-box" style="margin-top:30px; padding:22px; background:var(--ink-2); border:1px solid var(--line); border-radius:14px; max-width:480px;">
+        <label for="free-scan-input" style="display:block; font-family:var(--font-head); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; color:var(--teal); margin-bottom:10px;">Try it now — free scan</label>
+        <div style="display:flex; gap:10px;">
+          <input type="text" id="free-scan-input" placeholder="Your stage name or username" style="flex:1; background:rgba(246,242,236,.06); border:1px solid rgba(246,242,236,.2); color:var(--text-hi); padding:12px 14px; border-radius:8px; font-family:var(--font-body); font-size:.95rem;">
+          <button id="free-scan-btn" class="btn btn-primary" style="white-space:nowrap;">Scan Free</button>
+        </div>
+        <p id="free-scan-note" style="font-size:.76rem; color:var(--text-low); margin:10px 0 0;">3 free scans per day. No account needed.</p>
+        <div id="free-scan-results" class="hidden" style="margin-top:16px;"></div>
+      </div>
+
+      <div class="trust-row">
+        <div class="avatar-stack">
+          <span style="background:#0096F5;">JM</span>
+          <span style="background:#22C3A6;">AK</span>
+          <span style="background:#5B8DEF;">RS</span>
+          <span style="background:#6B5B95;">+</span>
+        </div>
+        <small>Trusted by creators across dozens of platforms</small>
+      </div>
+      <div class="platform-row">
+        <span class="label">Protection coverage includes</span>
+        <div class="chip-row">
+          <span class="chip">OnlyFans</span>
+          <span class="chip">Fansly</span>
+          <span class="chip">ManyVids</span>
+          <span class="chip">Chaturbate</span>
+          <span class="chip">Reddit</span>
+          <span class="chip">X / Twitter</span>
+          <span class="chip">Instagram</span>
+          <span class="chip">Google Search</span>
+          <span class="chip">Telegram</span>
+          <span class="chip">+ Other</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="radar-wrap" aria-hidden="true">
+      <div class="radar-ring r1"></div>
+      <div class="radar-ring r2"></div>
+      <div class="radar-ring r3"></div>
+      <div class="radar-ring r4"></div>
+      <div class="radar-sweep"></div>
+      <div class="radar-ping p1"></div>
+      <div class="radar-ping p2"></div>
+      <div class="radar-ping p3"></div>
+      <div class="radar-core">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L21 6 V12 C21 17 17 21 12 22 C7 21 3 17 3 12 V6 Z" stroke="#0096F5" stroke-width="2"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band-ink-2" id="how-it-works">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">See It In Action</span>
+      <h2>From scan to takedown — fully automated.</h2>
+      <p class="lede">Once your brand profile is set up, SentryVo's agents work continuously in the background. Here's what a live case looks like.</p>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-head">
+        <div class="who">
+          <span class="demo-avatar">AD</span>
+          <span>Case: astro_domina</span>
+        </div>
+        <span class="demo-status">Scanning</span>
+      </div>
+
+      <div class="demo-row" data-demo-row>
+        <div class="site"><span class="dot found"></span> reddit.com/r/leaks/astro_domina</div>
+        <span class="badge found">Leak Found</span>
+      </div>
+      <div class="demo-row" data-demo-row>
+        <div class="site"><span class="dot sent"></span> t.me/leaked_creators/4829</div>
+        <span class="badge sent">DMCA Sent</span>
+      </div>
+      <div class="demo-row" data-demo-row>
+        <div class="site"><span class="dot removed"></span> pirate-tube.xyz/leaks/astro</div>
+        <span class="badge removed">Removed</span>
+      </div>
+      <div class="demo-row" data-demo-row>
+        <div class="site"><span class="dot found"></span> google.com — 12 image results</div>
+        <span class="badge found">Leak Found</span>
+      </div>
+
+      <div class="demo-footer">
+        <span>1,006 automated actions run daily across all cases</span>
+        <span>Illustrative example</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Everything You Need</span>
+      <h2>One subscription. Your entire protection stack.</h2>
+      <p class="lede">Beyond takedowns — SentryVo learns your brand, watches for new leaks, and keeps fans pointed at your real profiles.</p>
+    </div>
+    <div class="grid-5">
+      <div class="feature-card">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#0096F5" stroke-width="2"/><path d="M21 21 L16 16" stroke="#0096F5" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <h3>AI-Powered Scanning</h3>
+        <p>Continuous sweeps across search engines, forums, tube sites and messaging apps.</p>
+        <ul>
+          <li>Hourly scans across 50+ platforms</li>
+          <li>Facial &amp; watermark recognition</li>
+          <li>Username and alias matching</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="#22C3A6" stroke-width="2"/></svg>
+        </div>
+        <h3>Automated Takedowns</h3>
+        <p>One toggle. We file the DMCA notice, follow up, and escalate if a host stays quiet.</p>
+        <ul>
+          <li>Auto-filed notices to hosts &amp; CDNs</li>
+          <li>Search engine delisting requests</li>
+          <li>Escalation to registrars when needed</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 12 L9 12 L11 6 L14 18 L16 12 L21 12" stroke="#5B8DEF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Fan Traffic Protection</h3>
+        <p>Redirect fans away from pirated links and back toward your real, monetized profile.</p>
+        <ul>
+          <li>Reclaim search results for your name</li>
+          <li>Auto-redirect from infringing pages</li>
+          <li>Recovery dashboard per takedown</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#0096F5" stroke-width="2"/><path d="M4 21 C4 16 8 14 12 14 C16 14 20 16 20 21" stroke="#0096F5" stroke-width="2"/></svg>
+        </div>
+        <h3>Smart Brand Learning</h3>
+        <p>Add your stage names and a reference photo — the AI gets sharper with every case.</p>
+        <ul>
+          <li>Multi-alias &amp; stage name detection</li>
+          <li>Learns across lighting &amp; styling changes</li>
+          <li>Auto-discovers linked accounts</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="14" rx="2" stroke="#22C3A6" stroke-width="2"/><path d="M3 9 H21" stroke="#22C3A6" stroke-width="2"/></svg>
+        </div>
+        <h3>Live Case Dashboard</h3>
+        <p>Every scan, notice and removal logged in real time — see exactly what's happening.</p>
+        <ul>
+          <li>Daily activity &amp; status log</li>
+          <li>Per-case revenue-recovery estimate</li>
+          <li>Downloadable takedown history</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="#5B8DEF" stroke-width="2"/><path d="M9 12 L11 14 L15 10" stroke="#5B8DEF" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Identity &amp; Doxing Protection</h3>
+        <p>Monitors for leaked personal details and helps get catfish accounts removed too.</p>
+        <ul>
+          <li>Breach &amp; leaked-data monitoring</li>
+          <li>Catfish &amp; impersonation removals</li>
+          <li>Confidential handling of your data</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band-paper">
+  <div class="wrap">
+    <div class="stats-grid">
+      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line-dark);">
+        <b style="color:var(--coral-dark);">Hourly</b>
+        <span style="color:var(--text-ink-2);">Scan Frequency</span>
+      </div>
+      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line-dark);">
+        <b style="color:var(--coral-dark);">50+</b>
+        <span style="color:var(--text-ink-2);">Platforms Covered</span>
+      </div>
+      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line-dark);">
+        <b style="color:var(--coral-dark);">24/7</b>
+        <span style="color:var(--text-ink-2);">Automated Monitoring</span>
+      </div>
+      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line-dark);">
+        <b style="color:var(--coral-dark);">[X]+</b>
+        <span style="color:var(--text-ink-2);">Add Your Real Numbers</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Results</span>
+      <h2>What protection looks like in practice.</h2>
+      <p class="lede">Illustrative examples — replace with real, verifiable case studies once you have customer data and permission to share it.</p>
+    </div>
+    <div class="case-grid">
+      <div class="case-card">
+        <div class="who">
+          <span class="avatar">C1</span>
+          <div><strong>Creator, Example A</strong></div>
+        </div>
+        <span class="metric-label">Revenue Recovered (example)</span>
+        <div class="metric">$[X],XXX</div>
+        <p style="margin-top:10px; font-size:.88rem;">"[Placeholder quote — replace with a real, permissioned testimonial]"</p>
+      </div>
+      <div class="case-card">
+        <div class="who">
+          <span class="avatar">C2</span>
+          <div><strong>Creator, Example B</strong></div>
+        </div>
+        <span class="metric-label">Leaks Removed (example)</span>
+        <div class="metric">X,XXX</div>
+        <p style="margin-top:10px; font-size:.88rem;">"[Placeholder quote — replace with a real, permissioned testimonial]"</p>
+      </div>
+      <div class="case-card">
+        <div class="who">
+          <span class="avatar">C3</span>
+          <div><strong>Creator, Example C</strong></div>
+        </div>
+        <span class="metric-label">Traffic Increase (example)</span>
+        <div class="metric">+XX%</div>
+        <p style="margin-top:10px; font-size:.88rem;">"[Placeholder quote — replace with a real, permissioned testimonial]"</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band-ink-2" id="pricing">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Pricing</span>
+      <h2>One subscription. Zero leaks. All tools.</h2>
+      <p class="lede">Simple, flat monthly pricing based on how many platforms you're protecting. No long-term contract — cancel any time from your dashboard.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="plan">
+        <h3>Single Keyword/Account</h3>
+        <div class="price">$30<small>/mo first order</small></div>
+        <p style="font-size:.82rem; color:var(--text-low); margin:-6px 0 0;">then $50/mo</p>
+        <p>For creators active on one platform — e.g. just OnlyFans.</p>
+        <ul>
+          <li>Daily AI scanning (web + Google Images)</li>
+          <li>Automated DMCA takedown attempts</li>
+          <li>Google search delisting requests</li>
+          <li>Social media &amp; leak-site monitoring</li>
+          <li>Detailed report every 3 days</li>
+          <li>Live case dashboard</li>
+        </ul>
+        <a href="register.html?plan=single" class="btn btn-primary btn-block">Get Protected</a>
+      </div>
+      <div class="plan featured">
+        <span class="ribbon">Best Value</span>
+        <h3>Multiple Keywords/Accounts</h3>
+        <div class="price">$80<small>/mo first order</small></div>
+        <p style="font-size:.82rem; color:var(--text-low); margin:-6px 0 0;">then $100/mo</p>
+        <p>For creators active on 2+ platforms — e.g. OnlyFans, Chaturbate, and PornHub together.</p>
+        <ul>
+          <li>Everything in Single Keyword/Account</li>
+          <li>Coverage across all your platforms</li>
+          <li>Daily detailed report (not every 3 days)</li>
+          <li>Priority takedown attempts</li>
+          <li>Unlimited stage names</li>
+        </ul>
+        <a href="register.html?plan=multi" class="btn btn-teal btn-block">Get Protected</a>
+      </div>
+    </div>
+    <p style="margin-top:22px; font-size:.85rem; color:var(--text-low);">To sign up, you provide links to <strong>your own</strong> original content as proof of ownership — never the infringing link. Our daily scans find the leaked copies for you.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Don't Take Our Word For It</span>
+      <h2>Illustrative testimonials</h2>
+      <p class="lede">Placeholder quotes for layout purposes — swap these for real, permissioned reviews from your own customers before publishing.</p>
+    </div>
+    <div class="testi-grid">
+      <div class="testi-card">
+        <p>"[Placeholder] My leaked content used to show up on the first page of Google. Within a couple of weeks I couldn't find it anymore."</p>
+        <div class="testi-who">
+          <span class="avatar">C</span>
+          <div><span>Creator, Example</span><small>Verified subscriber — placeholder</small></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <p>"[Placeholder] I don't have to think about it anymore — the dashboard just shows me what's been taken down each week."</p>
+        <div class="testi-who">
+          <span class="avatar">C</span>
+          <div><span>Creator, Example</span><small>Verified subscriber — placeholder</small></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <p>"[Placeholder] Being a faceless creator, I was worried nothing could catch reposts of my work. It's found things I didn't even know were out there."</p>
+        <div class="testi-who">
+          <span class="avatar">C</span>
+          <div><span>Creator, Example</span><small>Verified subscriber — placeholder</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band-ink-2">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Frequently Asked Questions</span>
+      <h2>Before you get protected.</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item open">
+        <button class="faq-q">How fast are leaks removed?<span class="plus">+</span></button>
+        <div class="faq-a"><p>Most confirmed leaks trigger an automated DMCA notice within hours of detection. More complex cases — disputed ownership, unresponsive hosts — are escalated and followed up manually.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Which platforms do you cover?<span class="plus">+</span></button>
+        <div class="faq-a"><p>Scanning covers major creator platforms, social media, search engines, forums and messaging apps, regardless of where your original content is hosted.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if I'm a faceless creator?<span class="plus">+</span></button>
+        <div class="faq-a"><p>Facial recognition is only one detection method. Watermark matching, username tracking and content fingerprinting all work independently of whether your face appears in the content.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Can I cancel anytime?<span class="plus">+</span></button>
+        <div class="faq-a"><p>Yes. There's no long-term contract — cancel from your dashboard whenever you like.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Will my identity stay private?<span class="plus">+</span></button>
+        <div class="faq-a"><p>Your personal information is never included in the public-facing DMCA notice, and account data is kept confidential and encrypted.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What is a DMCA takedown service?<span class="plus">+</span></button>
+        <div class="faq-a"><p>It's a service that files copyright removal requests on your behalf under the Digital Millennium Copyright Act, so you don't have to track down and report every instance of stolen content yourself.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="cta-band">
+      <h2>Ready to stop the leaks?</h2>
+      <p class="lede" style="margin:0 auto 26px;">Start with a free scan — see what's already out there before you commit to anything.</p>
+      <a href="#pricing" class="btn btn-primary btn-lg">Get Protected</a>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>SentryVo</h4>
+        <p style="max-width:32ch; color:var(--text-mid);">AI-powered leak detection and automated DMCA takedowns for content creators.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="index.html#how-it-works">How It Works</a></li>
+          <li><a href="index.html#features">Features</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="dashboard.html">Dashboard Preview</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <ul>
+          <li><a href="about.html">About Us</a></li>
+          <li><a href="contact.html">Contact</a></li>
+          <li><a href="login.html">Login</a></li>
+          <li><a href="register.html">Get Protected</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="terms.html">Terms of Service</a></li>
+          <li><a href="privacy.html">Privacy Policy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 SentryVo. All rights reserved.</span>
+      <span>help@sentryvo.example · [Your Support Number]</span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

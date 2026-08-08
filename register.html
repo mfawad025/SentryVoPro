@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get Protected — SentryVo</title>
+<meta name="description" content="Create your SentryVo account and start protecting your content with automated DMCA takedowns.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="logo">
+      <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
+    </a>
+    <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">MENU</button>
+    <nav class="nav-links">
+      <a href="index.html#how-it-works">How It Works</a>
+      <a href="index.html#features">Features</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="login.html">Login</a>
+    </nav>
+    <a href="register.html" class="nav-cta">Get Protected</a>
+  </div>
+</header>
+
+<section class="page-header">
+  <div class="wrap" style="text-align:center;">
+    <span class="eyebrow" style="justify-content:center;">Get Protected</span>
+    <h1>Create your account &amp; start scanning.</h1>
+    <p class="lede" style="margin:14px auto 0;">Pick your plan, tell us where to look, and you'll be redirected to Lemon Squeezy's secure checkout to complete payment.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:960px;">
+    <div class="pay-panel" style="background:var(--ink-2); border:1px solid var(--line); border-radius:16px; padding:44px;">
+      <div class="pay-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:44px;">
+        <div>
+          <h3 style="margin-bottom:18px;">01 — Account &amp; Case Details</h3>
+          <form id="order-form">
+            <div class="field">
+              <label for="plan-select">Plan</label>
+              <select id="plan-select" required>
+                <option value="single">Single Keyword/Account — $30 first order (then $50/mo)</option>
+                <option value="multi">Multiple Keywords/Accounts — $80 first order (then $100/mo)</option>
+              </select>
+            </div>
+
+            <div class="field" id="single-platform-field">
+              <label for="platform-single">Which platform are you on?</label>
+              <select id="platform-single">
+                <option>OnlyFans</option>
+                <option>Fansly</option>
+                <option>Chaturbate</option>
+                <option>ManyVids</option>
+                <option>Fancentro</option>
+                <option>PornHub</option>
+                <option value="Other">Other (not listed)</option>
+              </select>
+            </div>
+
+            <div class="field hidden" id="single-other-field">
+              <label for="single-other-name">Platform name</label>
+              <input type="text" id="single-other-name" placeholder="e.g. FanCentro, JustForFans, LoyalFans">
+              <label for="single-other-link" style="margin-top:14px;">Link to your profile there</label>
+              <input type="url" id="single-other-link" placeholder="https://...">
+            </div>
+
+            <div class="field hidden" id="multi-platform-field">
+              <label>Which platforms are you on? (select all that apply)</label>
+              <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:6px;">
+                <label class="chip" style="cursor:pointer;"><input type="checkbox" value="OnlyFans" class="platform-checkbox" style="margin-right:6px;">OnlyFans</label>
+                <label class="chip" style="cursor:pointer;"><input type="checkbox" value="Fansly" class="platform-checkbox" style="margin-right:6px;">Fansly</label>
+                <label class="chip" style="cursor:pointer;"><input type="checkbox" value="Chaturbate" class="platform-checkbox" style="margin-right:6px;">Chaturbate</label>
+                <label class="chip" style="cursor:pointer;"><input type="checkbox" value="ManyVids" class="platform-checkbox" style="margin-right:6px;">ManyVids</label>
+                <label class="chip" style="cursor:pointer;"><input type="checkbox" value="Fancentro" class="platform-checkbox" style="margin-right:6px;">Fancentro</label>
+                <label class="chip" style="cursor:pointer;"><input type="checkbox" value="PornHub" class="platform-checkbox" style="margin-right:6px;">PornHub</label>
+                <label class="chip" style="cursor:pointer;"><input type="checkbox" id="multi-other-checkbox" style="margin-right:6px;">Other</label>
+              </div>
+              <p class="confirm-note" style="font-size:.78rem; margin-top:8px;">Multiple Keywords/Accounts pricing applies once you select 2 or more.</p>
+            </div>
+
+            <div class="field hidden" id="multi-other-field">
+              <label for="multi-other-name">Other platform name</label>
+              <input type="text" id="multi-other-name" placeholder="e.g. FanCentro, JustForFans, LoyalFans">
+              <label for="multi-other-link" style="margin-top:14px;">Link to your profile there</label>
+              <input type="url" id="multi-other-link" placeholder="https://...">
+            </div>
+
+            <div class="field">
+              <label for="full-name">Full name / stage name</label>
+              <input type="text" id="full-name" required autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="email">Email address</label>
+              <input type="email" id="email" required autocomplete="email">
+            </div>
+            <div class="field">
+              <label for="mobile">Mobile number</label>
+              <input type="tel" id="mobile" placeholder="03XXXXXXXXX" required autocomplete="tel">
+            </div>
+            <div class="field">
+              <label for="password">Create a password</label>
+              <input type="password" id="password" required autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label for="aliases">Stage names / aliases to monitor</label>
+              <input type="text" id="aliases" placeholder="e.g. astro_domina, astroo_domina">
+            </div>
+            <div class="field">
+              <label for="original-links">Link(s) to your own original content</label>
+              <textarea id="original-links" placeholder="Paste links to your OWN posts/profile — one per line. This is proof of ownership, not the leaked/infringing link." rows="3"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="checkout-submit">Continue to Checkout</button>
+            <p class="confirm-note" style="font-size:.78rem; margin-top:8px;">First-order discount applies automatically at checkout if you're a new customer.</p>
+            <p class="confirm-note" id="checkout-status" style="min-height:1.2em; font-size:.82rem; color:var(--text-low); margin-top:12px;"></p>
+          </form>
+        </div>
+
+        <div>
+          <h3 style="margin-bottom:18px;">02 — How it works</h3>
+          <div class="bank-card" style="background:rgba(246,242,236,.04); border:1px dashed var(--line); padding:24px; border-radius:12px;">
+            <div class="bank-row" style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line-soft); font-size:.85rem;"><span style="color:var(--text-low); text-transform:uppercase; letter-spacing:.06em; font-size:.7rem;">Step 1</span><span>Submit this form</span></div>
+            <div class="bank-row" style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line-soft); font-size:.85rem;"><span style="color:var(--text-low); text-transform:uppercase; letter-spacing:.06em; font-size:.7rem;">Step 2</span><span>Redirect to Lemon Squeezy's secure checkout</span></div>
+            <div class="bank-row" style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line-soft); font-size:.85rem;"><span style="color:var(--text-low); text-transform:uppercase; letter-spacing:.06em; font-size:.7rem;">Step 3</span><span>Enter card details there</span></div>
+            <div class="bank-row" style="display:flex; justify-content:space-between; padding:10px 0; font-size:.85rem;"><span style="color:var(--text-low); text-transform:uppercase; letter-spacing:.06em; font-size:.7rem;">Step 4</span><span>Land on your new dashboard</span></div>
+          </div>
+          <p class="confirm-note" style="font-size:.82rem; color:var(--text-low); margin-top:14px;">Card details are entered on Lemon Squeezy's own hosted page, never on this site — we never handle or store that data.</p>
+          <p class="confirm-note" style="font-size:.82rem; color:var(--text-low); margin-top:10px;">Only submit links to <strong>your own</strong> content here — this is what proves ownership when we file a takedown on your behalf. Found leaks (the infringing copies) are what our daily scans find automatically; you don't need to submit those yourself.</p>
+
+          <div id="order-result" class="ref-code hidden" style="flex-direction:column; align-items:flex-start; gap:10px; margin-top:18px; padding:14px 16px; background:rgba(245,88,107,.12); border:1px solid var(--coral); border-radius:8px; font-family:var(--font-head); font-size:.9rem;">
+            <span id="ref-code-value">—</span>
+            <span id="order-summary" style="font-size:.78rem; color:var(--text-low);"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p style="text-align:center; margin-top:20px; font-size:.9rem; color:var(--text-low);">Already have an account? <a href="login.html" style="color:var(--coral);">Log in</a></p>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>© 2026 SentryVo. All rights reserved.</span>
+      <span><a href="terms.html" style="color:inherit;">Terms</a> · <a href="privacy.html" style="color:inherit;">Privacy</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const planSelect = document.getElementById('plan-select');
+    const singleField = document.getElementById('single-platform-field');
+    const multiField = document.getElementById('multi-platform-field');
+    const platformSingle = document.getElementById('platform-single');
+    const singleOtherField = document.getElementById('single-other-field');
+    const multiOtherCheckbox = document.getElementById('multi-other-checkbox');
+    const multiOtherField = document.getElementById('multi-other-field');
+
+    if (!planSelect || !singleField || !multiField) {
+      console.error('SentryVo: plan/platform fields not found — check element IDs match script.js');
+      return;
+    }
+
+    function togglePlatformFields() {
+      const isMulti = planSelect.value === 'multi';
+      singleField.classList.toggle('hidden', isMulti);
+      multiField.classList.toggle('hidden', !isMulti);
+      if (isMulti) singleOtherField.classList.add('hidden');
+      else multiOtherField.classList.add('hidden');
+    }
+    planSelect.addEventListener('change', togglePlatformFields);
+
+    platformSingle?.addEventListener('change', function () {
+      singleOtherField.classList.toggle('hidden', platformSingle.value !== 'Other');
+    });
+
+    multiOtherCheckbox?.addEventListener('change', function () {
+      multiOtherField.classList.toggle('hidden', !multiOtherCheckbox.checked);
+    });
+
+    // Pre-select plan from ?plan= query param coming from pricing links
+    const params = new URLSearchParams(window.location.search);
+    const plan = params.get('plan');
+    if (plan === 'single' || plan === 'multi') planSelect.value = plan;
+    togglePlatformFields();
+  });
+</script>
+</body>
+</html>

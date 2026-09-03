@@ -1,7 +1,7 @@
 {
   "name": "sentryvo-server",
   "version": "1.0.0",
-  "description": "SentryVo backend: Lemon Squeezy checkout, user accounts, daily leak scanning, RDAP hosting lookup, Excel reports, and email reports.",
+  "description": "SentryVo backend: Lemon Squeezy checkout, real login sessions, Postgres-backed user accounts and dashboard data, daily leak scanning, RDAP hosting lookup, Excel reports, and email reports.",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.3.0",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "exceljs": "^4.4.0",
@@ -19,6 +19,7 @@
     "express-rate-limit": "^7.4.0",
     "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0",
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.14",
+    "pg": "^8.12.0"
   }
 }

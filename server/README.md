@@ -10,7 +10,7 @@ Handles:
    aliases, attempts best-effort DMCA takedown notices, rechecks previously
    reported leaks for removal.
 4. **Email reports** — sent on each subscriber's plan cadence (daily for
-   Multi-Platform, every 3 days for Single Platform).
+   Multiple Keywords/Accounts, every 3 days for Single Keyword/Account).
 
 ## Free scan tool (public homepage)
 
@@ -31,11 +31,13 @@ Only the top 3 results are shown publicly (with a "+N more found" teaser)
 | Plan | First order | Then | Keywords/accounts covered | Report cadence |
 |---|---|---|---|---|
 | Single Keyword/Account | $30 | $50/mo | Exactly one | Every 3 days |
-| Multiple Keywords/Accounts | $80 | $100/mo | Two or more | Daily |
+| Multiple Keywords/Accounts | $60 | $100/mo | Two or more | Daily |
 
-The first-order discount is a Lemon Squeezy discount code (see setup below),
-not a separate product — Lemon Squeezy enforces "new customers only"
-server-side, so it can't be reused by re-visiting the checkout link.
+Both plans get the same 40% off their first payment, so one Lemon Squeezy
+discount code covers both — no need for separate per-plan codes.
+The discount is a Lemon Squeezy discount code (see setup below), not a
+separate product — Lemon Squeezy enforces "new customers only" server-side,
+so it can't be reused by re-visiting the checkout link.
 
 ## Setup
 
@@ -44,6 +46,22 @@ cd server
 npm install
 cp env.example.txt .env
 ```
+
+### Database (Postgres — do this first, everything else depends on it)
+
+1. Sign up at neon.tech, create a project (free tier, no expiry, no card).
+2. Copy the connection string into `.env` as `DATABASE_URL`.
+3. That's it — `db.js` creates all tables automatically on first startup.
+
+### Sessions / login
+
+Login now sets a real `httpOnly` cookie (see `SESSION_COOKIE_NAME` in
+`index.js`), not just a password check. Two things this depends on:
+- Your frontend must fetch with `credentials: 'include'` (already done in
+  `script.js`, `login.html`, and `dashboard.html`) — without this, the
+  cookie never gets sent or stored.
+- `ALLOWED_ORIGIN` must be your exact frontend domain, not `*` — cookie-based
+  CORS requires a specific origin.
 
 ### Lemon Squeezy
 
@@ -130,6 +148,12 @@ can wire up for you.
   recognition API would. That's a future upgrade, not a rewrite — add
   another search function next to `googleSearch.js` and call it from
   `scanner.js`.
+- **A subscriber's own official pages never get flagged as leaks** —
+  `scanner.js`'s `isOwnContent()` checks every search result against the
+  original-content links they submitted at signup (exact URL or same
+  domain) before ever inserting it as a leak. This matters for creators
+  active on multiple official platforms — make sure they list all of them
+  at registration, not just one.
 - **Filing takedowns**: looks up real abuse contacts via RDAP where
   possible, falls back to a guessed `abuse@<hostname>` otherwise, and emails
   a templated DMCA notice either way. Many hosts don't monitor either
@@ -147,14 +171,14 @@ can wire up for you.
 ## Deployment notes
 
 - Needs real Node hosting (Render, Railway, a VPS) — not GitHub Pages.
-- **SQLite is local to the server's filesystem.** Free tiers on hosts like
-  Render wipe local disk on redeploy. For real subscribers, swap `db.js`'s
-  connection for a hosted Postgres (Supabase/Neon both have free tiers) —
-  the SQL is plain enough to translate directly.
-- Keep the server **always-on** (not a free tier that sleeps) or the daily
-  cron job won't fire reliably. Alternative: use an external cron service
-  (e.g. cron-job.org, free) to hit `/api/scan/run-now` on a schedule instead
-  of relying on `node-cron` inside a sleeping process.
+- **Database now persists properly** — Neon's Postgres survives redeploys,
+  unlike the old SQLite setup. Nothing to worry about here anymore as long
+  as `DATABASE_URL` stays correctly set in your host's environment variables.
+- Keep the server **always-on** (Render Starter tier or equivalent, not a
+  free tier that sleeps) or the daily cron job won't fire reliably.
+  Alternative: use an external cron service (e.g. cron-job.org, free) to hit
+  `/api/scan/run-now` on a schedule instead of relying on `node-cron` inside
+  a sleeping process.
 - Watch your Google Custom Search quota (100 free queries/day) — the query
   count per subscriber scales with how many aliases and platforms they have,
   so budget accordingly as you grow.

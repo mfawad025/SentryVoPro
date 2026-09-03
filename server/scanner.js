@@ -70,6 +70,42 @@ function guessAbuseEmail(url) {
   }
 }
 
+/**
+ * Checks whether a search result is actually the creator's OWN official
+ * content — never something to flag as a leak or takedown target.
+ *
+ * A creator often posts on multiple official platforms (their own OnlyFans,
+ * Fansly, a personal site, etc.), submitted at signup as "original content
+ * links" specifically as proof of ownership. Without this check, a daily
+ * scan would eventually find and re-flag those same official pages as
+ * "leaks" and even attempt to send a DMCA takedown notice against the
+ * creator's own legitimate account — which would be both wrong and
+ * embarrassing. This matches two ways, deliberately broad:
+ *   1. Exact URL match against a submitted original link
+ *   2. Same hostname as a submitted original link (covers the same site
+ *      showing up with a different path, tracking params, http vs https,
+ *      or www vs non-www)
+ */
+function isOwnContent(resultUrl, originalLinks) {
+  let resultHost;
+  try {
+    resultHost = new URL(resultUrl).hostname.replace(/^www\./, '');
+  } catch {
+    return false;
+  }
+
+  for (const ownUrl of originalLinks) {
+    if (ownUrl === resultUrl) return true;
+    try {
+      const ownHost = new URL(ownUrl).hostname.replace(/^www\./, '');
+      if (ownHost && ownHost === resultHost) return true;
+    } catch {
+      // Not a parseable URL — skip host comparison for this entry
+    }
+  }
+  return false;
+}
+
 function getMailer() {
   if (!process.env.SMTP_HOST || process.env.SMTP_HOST === 'smtp.yourprovider.com') return null;
   return nodemailer.createTransport({
@@ -96,7 +132,7 @@ async function attemptTakedownNotice(leak, user) {
   } catch (err) {
     console.warn(`RDAP lookup failed for ${leak.url}:`, err.message);
   }
-  if (hostingOrg) db.setLeakHostingProvider(leak.id, hostingOrg);
+  if (hostingOrg) await db.setLeakHostingProvider(leak.id, hostingOrg);
 
   if (!targetEmails.length) {
     const guessed = guessAbuseEmail(leak.url);
@@ -153,8 +189,10 @@ async function recheckLeak(leak) {
 
 async function runDailyScanForUser(user) {
   const scanStart = new Date().toISOString();
-  const aliases = db.getAliasesForUser(user.id);
+  const aliases = await db.getAliasesForUser(user.id);
   const platforms = (user.platforms || '').split(',').map((p) => p.trim()).filter(Boolean);
+  // The creator's own official links — never flag these as leaks, see isOwnContent().
+  const originalLinks = await db.getOriginalLinksForUser(user.id);
 
   for (const alias of aliases) {
     // Text search: leak-site mentions, forum posts, social platform posts
@@ -162,8 +200,9 @@ async function runDailyScanForUser(user) {
       try {
         const results = await searchGoogle(query);
         for (const result of results) {
-          if (!db.leakExists(user.id, result.url)) {
-            db.insertLeak({
+          if (isOwnContent(result.url, originalLinks)) continue;
+          if (!(await db.leakExists(user.id, result.url))) {
+            await db.insertLeak({
               userId: user.id,
               url: result.url,
               title: result.title,
@@ -182,8 +221,9 @@ async function runDailyScanForUser(user) {
       try {
         const results = await searchGoogleImages(query);
         for (const result of results) {
-          if (!db.leakExists(user.id, result.url)) {
-            db.insertLeak({
+          if (isOwnContent(result.url, originalLinks)) continue;
+          if (!(await db.leakExists(user.id, result.url))) {
+            await db.insertLeak({
               userId: user.id,
               url: result.url,
               title: result.title,
@@ -199,17 +239,17 @@ async function runDailyScanForUser(user) {
   }
 
   // Attempt takedown notices for anything newly found
-  const newlyFound = db.getLeaksByStatus(user.id, 'found');
+  const newlyFound = await db.getLeaksByStatus(user.id, 'found');
   for (const leak of newlyFound) {
     const sent = await attemptTakedownNotice(leak, user);
-    if (sent) db.markLeakStatus(leak.id, 'reported');
+    if (sent) await db.markLeakStatus(leak.id, 'reported');
   }
 
   // Recheck previously-reported leaks for removal
-  const reported = db.getLeaksByStatus(user.id, 'reported');
+  const reported = await db.getLeaksByStatus(user.id, 'reported');
   for (const leak of reported) {
     const removed = await recheckLeak(leak);
-    if (removed) db.markLeakStatus(leak.id, 'removed');
+    if (removed) await db.markLeakStatus(leak.id, 'removed');
   }
 
   // Scanning runs every day regardless of plan (catch things fast), but the
@@ -218,12 +258,12 @@ async function runDailyScanForUser(user) {
   // plan (see report_frequency_days in db.js).
   if (db.isReportDue(user)) {
     const sinceTimestamp = user.last_report_at || scanStart;
-    const leaksSinceLastReport = db.getLeaksFoundSince(user.id, sinceTimestamp);
-    const summary = db.getLeakSummary(user.id);
+    const leaksSinceLastReport = await db.getLeaksFoundSince(user.id, sinceTimestamp);
+    const summary = await db.getLeakSummary(user.id);
 
     await sendDailyReportEmail(user, leaksSinceLastReport, summary);
-    db.logReportSent(user.id, leaksSinceLastReport.length);
-    db.markReportSentNow(user.id);
+    await db.logReportSent(user.id, leaksSinceLastReport.length);
+    await db.markReportSentNow(user.id);
 
     return { user: user.email, reportSent: true, newLeaks: leaksSinceLastReport.length, summary };
   }
@@ -232,7 +272,7 @@ async function runDailyScanForUser(user) {
 }
 
 async function runDailyScanForAllUsers() {
-  const users = db.getActiveUsers();
+  const users = await db.getActiveUsers();
   const results = [];
   for (const user of users) {
     try {
@@ -246,7 +286,8 @@ async function runDailyScanForAllUsers() {
 
 // Allow running manually: `npm run scan-now`
 if (require.main === module && process.argv.includes('--run-once')) {
-  runDailyScanForAllUsers()
+  db.ready
+    .then(() => runDailyScanForAllUsers())
     .then((r) => {
       console.log('Scan complete:', r);
       process.exit(0);

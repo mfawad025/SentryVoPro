@@ -6,20 +6,18 @@
  * query params appended to prefill the buyer's details and attach custom
  * data linking the purchase back to your local user record.
  *
- * PRICING MODEL: two plans, each with a first-time-customer discount:
- *   - Single Keyword/Account: $50/mo, $30 for a customer's first payment
- *   - Multiple Keywords/Accounts: $100/mo, $80 for a customer's first payment
+ * PRICING MODEL: two plans, same 40% first-time-customer discount on both:
+ *   - Single Keyword/Account: $50/mo, 40% off first payment (→ $30)
+ *   - Multiple Keywords/Accounts: $100/mo, 40% off first payment (→ $60)
  *
- * The discount is applied via a Lemon Squeezy DISCOUNT CODE, not a separate
- * checkout link — set this up once in your dashboard:
+ * Because both plans use the SAME percentage, one discount code covers
+ * both — set it up once in your dashboard:
  *   Store > Discounts > New Discount
- *     - Amount: $20 off (works for both plans since it's a flat discount)
- *     - Restrict to: "First order only" / "New customers only" (Lemon
- *       Squeezy enforces this server-side, so it can't be reused or abused
- *       by editing the URL)
- *   Then put that discount's CODE in LEMONSQUEEZY_FIRST_ORDER_DISCOUNT_CODE
- *   in .env — every checkout link will include it, and Lemon Squeezy
- *   silently ignores it for anyone who isn't eligible.
+ *     - "FIRST40": 40% off, store-wide (applies to all products),
+ *       restricted to "New customers only"
+ *   Lemon Squeezy enforces "new customers only" server-side, so the code
+ *   can't be reused or abused by editing the URL. Put the code in
+ *   LEMONSQUEEZY_FIRST_ORDER_DISCOUNT_CODE in .env.
  *
  * No API key is needed for this flow (that's only required if you want to
  * generate checkouts dynamically via the API instead of query params — see
@@ -49,9 +47,19 @@ function buildCheckoutUrl(planKey, { userId, name, email }) {
   // Keeps the buyer on a consistent, embeddable experience; safe to remove.
   url.searchParams.set('embed', '1');
 
+  // Same 40% discount applies to both plans, so this is a single shared code.
   const discountCode = process.env.LEMONSQUEEZY_FIRST_ORDER_DISCOUNT_CODE;
   if (discountCode) {
     url.searchParams.set('checkout[discount_code]', discountCode);
+  }
+
+  // Send the buyer back to your success page after payment completes.
+  // This is a fallback — also set the same URL as the product's default
+  // "Redirect URL" in Lemon Squeezy's dashboard (Product > Checkout tab),
+  // since that's the setting Lemon Squeezy is guaranteed to honor even if
+  // this query param behavior changes.
+  if (process.env.SENTRYVO_SITE_URL) {
+    url.searchParams.set('checkout[redirect_url]', `${process.env.SENTRYVO_SITE_URL}/success.html`);
   }
 
   return url.toString();

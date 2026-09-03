@@ -265,6 +265,7 @@ section{ padding:84px 0; }
 
 /* ---------- Pricing ---------- */
 .pricing-grid{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:stretch; }
+.pricing-grid-3col{ grid-template-columns:repeat(3,1fr); }
 .plan{
   background: var(--glass); backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
   border:1px solid var(--glass-border); border-radius:20px; box-shadow:0 12px 40px rgba(255,255,255,.06);
@@ -337,6 +338,7 @@ section{ padding:84px 0; }
 
 /* ---------- Checkout / "how it works" panel (register page) ---------- */
 .pay-panel{ }
+.pay-grid{ display:grid; grid-template-columns:1fr 1fr; gap:44px; }
 .bank-card{ background: var(--paper-2); border:1px dashed var(--line); padding:24px; border-radius:14px; }
 .bank-row{ display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line-soft); font-size:.85rem; }
 .bank-row:last-child{ border-bottom:none; }
@@ -378,11 +380,24 @@ section{ padding:84px 0; }
 
 /* ---------- Responsive ---------- */
 @media (max-width:960px){
-  .hero-grid, .footer-grid, .pricing-grid{ grid-template-columns:1fr; }
+  .hero-grid, .footer-grid, .pricing-grid, .pay-grid{ grid-template-columns:1fr; }
   .grid-5, .case-grid, .testi-grid, .stats-grid{ grid-template-columns:1fr; }
   .dash-shell{ grid-template-columns:1fr; }
-  .dash-sidebar{ display:none; }
+
+  /* Sidebar becomes a horizontal scrollable strip instead of vanishing —
+     this was a real bug: hiding it entirely also hid the only Logout
+     button on the page, with no other way to sign out on mobile. */
+  .dash-sidebar{
+    flex-direction:row; align-items:center; overflow-x:auto;
+    padding:12px 14px; gap:4px; white-space:nowrap;
+  }
+  .dash-sidebar .logo{ margin-bottom:0; margin-right:10px; flex:0 0 auto; }
+  .dash-sidebar .logo img{ height:26px; }
+  .dash-link{ flex:0 0 auto; padding:8px 10px; font-size:.85rem; }
+  #sidebar-user{ display:none; } /* redundant on mobile — email already shown in topbar case label */
+
   .dash-stats{ grid-template-columns:1fr 1fr; }
+
   .nav-links{
     position:fixed; inset:60px 0 0 0; background:var(--glass-strong); backdrop-filter: blur(var(--blur));
     flex-direction:column; align-items:flex-start; padding:30px 28px; gap:22px;
@@ -391,4 +406,25 @@ section{ padding:84px 0; }
   .nav-links.open{ transform:translateX(0); }
   .nav-toggle{ display:block; background:none; border:1px solid var(--line); color:var(--ink); padding:8px 12px; border-radius:8px; font-family:var(--font-body); cursor:pointer; }
   .nav-cta{ display:none; }
+
+  /* Tables can overflow badly on narrow screens (long URLs especially) —
+     the wrapping div around dash-table (see dashboard.html) handles the
+     actual scrolling; this just ensures the table itself doesn't shrink
+     illegibly. */
+  .dash-table{ min-width:520px; }
+
+  /* Free-scan box: stack the input and button instead of squeezing both
+     onto one row. */
+  .free-scan-box > div{ flex-direction:column; }
+  .free-scan-box input, .free-scan-box button{ width:100%; }
+}
+
+@media (max-width:600px){
+  section{ padding:56px 0; }
+  .hero{ padding:56px 0 40px; }
+  .hero-actions{ flex-direction:column; align-items:stretch; }
+  .hero-actions .btn{ width:100%; text-align:center; }
+  .dash-stats{ grid-template-columns:1fr; }
+  .dash-main{ padding:24px 18px; }
+  .plan{ padding:28px 22px; }
 }

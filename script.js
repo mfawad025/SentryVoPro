@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ---------------- Registration + Lemon Squeezy checkout flow ----------------
 // Point this at your deployed backend (see /server/README.md).
 // Use http://localhost:4242 while testing locally.
-const SENTRYVO_BACKEND_URL = 'https://sentryvopro.onrender.com';
+const SENTRYVO_BACKEND_URL = 'https://your-sentryvo-backend.example.com';
 
 function initRegisterForm() {
   const form = document.getElementById('order-form');

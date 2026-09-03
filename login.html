@@ -38,13 +38,11 @@
           <label for="login-password">Password</label>
           <input type="password" id="login-password" required autocomplete="current-password">
         </div>
-        <button type="submit" class="btn btn-primary btn-block">Log In</button>
+        <button type="submit" class="btn btn-primary btn-block" id="login-submit">Log In</button>
+        <p class="confirm-note" id="login-status" style="min-height:1.2em; font-size:.82rem; color:var(--text-low); margin-top:12px; text-align:center;"></p>
       </form>
-      <p style="text-align:center; font-size:.85rem; color:var(--text-low); margin-top:18px;">
-        <a href="#" style="color:var(--coral);">Forgot password?</a>
-      </p>
       <p style="text-align:center; font-size:.85rem; color:var(--text-low); margin-top:8px;">
-        Don't have an account? <a href="register.html" style="color:var(--coral);">Get protected</a>
+        Don't have an account? <a href="register.html" style="color:var(--rust);">Get protected</a>
       </p>
     </div>
   </div>
@@ -61,10 +59,37 @@
 
 <script src="script.js"></script>
 <script>
-  document.getElementById('login-form').addEventListener('submit', function(e){
+  document.getElementById('login-form').addEventListener('submit', async function(e){
     e.preventDefault();
-    // This is a static mockup — wire this up to your real auth backend.
-    window.location.href = 'dashboard.html';
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const statusEl = document.getElementById('login-status');
+    const submitBtn = document.getElementById('login-submit');
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Logging in…';
+    statusEl.textContent = '';
+
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include', // required so the session cookie is sent/stored
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      window.location.href = 'dashboard.html';
+    } catch (err) {
+      statusEl.textContent = err.message || 'Could not log in. Please try again.';
+      statusEl.style.color = '#0096F5';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Log In';
+    }
   });
 </script>
 </body>

@@ -23,6 +23,8 @@
       <a href="index.html#how-it-works">How It Works</a>
       <a href="index.html#features">Features</a>
       <a href="pricing.html">Pricing</a>
+      <a href="agencies.html">For Agencies</a>
+      <a href="blog.html">Blog</a>
       <a href="login.html">Login</a>
     </nav>
     <a href="register.html" class="nav-cta">Get Protected</a>
@@ -40,7 +42,7 @@
 <section>
   <div class="wrap" style="max-width:960px;">
     <div class="pay-panel" style="background:var(--ink-2); border:1px solid var(--line); border-radius:16px; padding:44px;">
-      <div class="pay-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:44px;">
+      <div class="pay-grid">
         <div>
           <h3 style="margin-bottom:18px;">01 — Account &amp; Case Details</h3>
           <form id="order-form">
@@ -48,7 +50,7 @@
               <label for="plan-select">Plan</label>
               <select id="plan-select" required>
                 <option value="single">Single Keyword/Account — $30 first order (then $50/mo)</option>
-                <option value="multi">Multiple Keywords/Accounts — $80 first order (then $100/mo)</option>
+                <option value="multi">Multiple Keywords/Accounts — $60 first order (then $100/mo)</option>
               </select>
             </div>
 
@@ -115,7 +117,8 @@
             </div>
             <div class="field">
               <label for="original-links">Link(s) to your own original content</label>
-              <textarea id="original-links" placeholder="Paste links to your OWN posts/profile — one per line. This is proof of ownership, not the leaked/infringing link." rows="3"></textarea>
+              <textarea id="original-links" placeholder="Paste links to your OWN posts/profile — one per line. This is proof of ownership, not the leaked/infringing link." rows="4"></textarea>
+              <p class="confirm-note" style="font-size:.78rem; margin-top:6px;">If you post on more than one site (e.g. your own OnlyFans <em>and</em> Fansly <em>and</em> a personal site), add all of them here — one per line. This keeps your own official pages from ever being mistaken for a leak.</p>
             </div>
 
             <button type="submit" class="btn btn-primary btn-block" id="checkout-submit">Continue to Checkout</button>
@@ -135,14 +138,14 @@
           <p class="confirm-note" style="font-size:.82rem; color:var(--text-low); margin-top:14px;">Card details are entered on Lemon Squeezy's own hosted page, never on this site — we never handle or store that data.</p>
           <p class="confirm-note" style="font-size:.82rem; color:var(--text-low); margin-top:10px;">Only submit links to <strong>your own</strong> content here — this is what proves ownership when we file a takedown on your behalf. Found leaks (the infringing copies) are what our daily scans find automatically; you don't need to submit those yourself.</p>
 
-          <div id="order-result" class="ref-code hidden" style="flex-direction:column; align-items:flex-start; gap:10px; margin-top:18px; padding:14px 16px; background:rgba(245,88,107,.12); border:1px solid var(--coral); border-radius:8px; font-family:var(--font-head); font-size:.9rem;">
+          <div id="order-result" class="ref-code hidden" style="flex-direction:column; align-items:flex-start; gap:10px; margin-top:18px; padding:14px 16px; background:rgba(245,88,107,.12); border:1px solid var(--rust); border-radius:8px; font-family:var(--font-head); font-size:.9rem;">
             <span id="ref-code-value">—</span>
             <span id="order-summary" style="font-size:.78rem; color:var(--text-low);"></span>
           </div>
         </div>
       </div>
     </div>
-    <p style="text-align:center; margin-top:20px; font-size:.9rem; color:var(--text-low);">Already have an account? <a href="login.html" style="color:var(--coral);">Log in</a></p>
+    <p style="text-align:center; margin-top:20px; font-size:.9rem; color:var(--text-low);">Already have an account? <a href="login.html" style="color:var(--rust);">Log in</a></p>
   </div>
 </section>
 

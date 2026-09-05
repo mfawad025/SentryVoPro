@@ -1,47 +1,69 @@
 /**
- * Thin wrapper around Google's Custom Search JSON API.
- * Docs: https://developers.google.com/custom-search/v1/overview
+ * Search wrapper — now backed by Serper.dev instead of Google Custom Search.
  *
- * Free tier: 100 queries/day. Paid: ~$5 per 1,000 queries beyond that.
- * Each call here is ONE query — if you search multiple aliases per user,
- * multiply accordingly when estimating your daily quota.
+ * Why the switch: as of January 2026, Google discontinued "search the
+ * entire web" for new Programmable Search Engines — new engines are capped
+ * to a manually curated list of up to 50 sites, which made the scanner far
+ * narrower than intended. Serper.dev proxies real, unrestricted Google
+ * search results with no such cap.
+ *
+ * Docs: https://serper.dev/docs
+ * Pricing: ~2,500 free queries on signup, then roughly $1 per 1,000 queries
+ * beyond that — cheap enough at this project's current scale that it's
+ * barely worth metering closely, but keep an eye on it as subscriber count
+ * (and therefore daily query volume) grows.
+ *
+ * The function names and return shape (`[{ url, title }]`) are unchanged
+ * from the old Google CSE version on purpose — scanner.js and index.js
+ * (the free scan endpoint) call these exactly as before, no changes needed
+ * anywhere else.
  */
 require('dotenv').config();
 const fetch = require('node-fetch');
 
+const SERPER_BASE = 'https://google.serper.dev';
+
 async function searchGoogle(query) {
-  return runQuery(query, {});
-}
-
-async function searchGoogleImages(query) {
-  return runQuery(query, { searchType: 'image' });
-}
-
-async function runQuery(query, extraParams) {
-  const apiKey = process.env.GOOGLE_CSE_API_KEY;
-  const cx = process.env.GOOGLE_CSE_CX;
-
-  if (!apiKey || !cx || apiKey === 'your_google_api_key') {
-    throw new Error('Google Custom Search is not configured (GOOGLE_CSE_API_KEY / GOOGLE_CSE_CX missing)');
-  }
-
-  const url = new URL('https://www.googleapis.com/customsearch/v1');
-  url.searchParams.set('key', apiKey);
-  url.searchParams.set('cx', cx);
-  url.searchParams.set('q', query);
-  url.searchParams.set('num', '10');
-  Object.entries(extraParams).forEach(([k, v]) => url.searchParams.set(k, v));
-
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Google CSE request failed: HTTP ${res.status} ${text.slice(0, 200)}`);
-  }
-  const data = await res.json();
-  return (data.items || []).map((item) => ({
+  const data = await runQuery('/search', query);
+  const organic = data.organic || [];
+  return organic.map((item) => ({
     url: item.link,
     title: item.title,
   }));
+}
+
+async function searchGoogleImages(query) {
+  const data = await runQuery('/images', query);
+  const images = data.images || [];
+  return images.map((item) => ({
+    // Serper's images response has used slightly different field names
+    // across versions of their API — check both to stay resilient.
+    url: item.imageUrl || item.link,
+    title: item.title,
+  }));
+}
+
+async function runQuery(path, query) {
+  const apiKey = process.env.SERPER_API_KEY;
+  if (!apiKey || apiKey === 'your_serper_api_key') {
+    throw new Error('Serper.dev is not configured (SERPER_API_KEY missing)');
+  }
+
+  const res = await fetch(`${SERPER_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'X-API-KEY': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ q: query, num: 10 }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Serper.dev request failed: HTTP ${res.status} ${text.slice(0, 200)}`);
+  }
+
+  return res.json();
 }
 
 module.exports = { searchGoogle, searchGoogleImages };

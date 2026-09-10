@@ -311,6 +311,24 @@ app.post('/api/scan/run-now', async (req, res) => {
 // fastest way to confirm SMTP_HOST/PORT/USER/PASS actually work without
 // needing an active subscriber or waiting for the daily cron.
 // Usage: POST /api/test-email  with JSON body { "to": "you@example.com" }
+// GET version: just visit this URL directly in a browser, no extra tools
+// needed — e.g. https://api.sentryvo.com/api/test-email?to=you@example.com
+app.get('/api/test-email', async (req, res) => {
+  try {
+    const { sendTestEmail } = require('./emailReport');
+    const to = req.query?.to || process.env.SMTP_USER;
+    if (!to) {
+      return res.status(400).json({ error: 'Add ?to=you@example.com to the URL' });
+    }
+    await sendTestEmail(to);
+    res.json({ ok: true, message: `Test email sent to ${to}` });
+  } catch (err) {
+    console.error('Test email failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST version, for anyone using a tool like Postman/curl instead.
 app.post('/api/test-email', async (req, res) => {
   try {
     const { sendTestEmail } = require('./emailReport');

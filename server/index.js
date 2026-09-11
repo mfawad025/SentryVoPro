@@ -313,6 +313,7 @@ app.post('/api/scan/run-now', async (req, res) => {
 // Usage: POST /api/test-email  with JSON body { "to": "you@example.com" }
 // GET version: just visit this URL directly in a browser, no extra tools
 // needed — e.g. https://api.sentryvo.com/api/test-email?to=you@example.com
+/*
 app.get('/api/test-email', async (req, res) => {
   try {
     const { sendTestEmail } = require('./emailReport');

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get Started — SentryVo for Agencies</title>
+<meta name="description" content="Create your SentryVo agency account and start protecting your roster of creators.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="logo">
+      <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
+    </a>
+    <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">MENU</button>
+    <nav class="nav-links">
+      <a href="index.html#how-it-works">How It Works</a>
+      <a href="index.html#features">Features</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="agencies.html" style="color:var(--ink);">For Agencies</a>
+      <a href="blog.html">Blog</a>
+      <a href="login.html">Login</a>
+    </nav>
+    <a href="register.html" class="nav-cta">Get Protected</a>
+  </div>
+</header>
+
+<section class="page-header">
+  <div class="wrap" style="text-align:center;">
+    <span class="eyebrow" style="justify-content:center;">Agency Signup</span>
+    <h1>Set up your agency account.</h1>
+    <p class="lede" style="margin:14px auto 0;">This creates your owner account and starts checkout for your chosen tier. Once active, you can add creators to your roster — no separate signup needed for each one.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:960px;">
+    <div class="pay-panel" style="background:var(--ink-2); border:1px solid var(--line); border-radius:16px; padding:44px;">
+      <div class="pay-grid">
+        <div>
+          <h3 style="margin-bottom:18px;">01 — Agency &amp; Owner Details</h3>
+          <form id="agency-register-form">
+            <div class="field">
+              <label for="tier-select">Tier</label>
+              <select id="tier-select" required>
+                <option value="agency_starter">Agency Starter — $200/mo (up to 5 creators)</option>
+                <option value="agency_growth">Agency Growth — $500/mo (up to 15 creators)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="agency-name">Agency / studio name</label>
+              <input type="text" id="agency-name" required>
+            </div>
+            <div class="field">
+              <label for="owner-name">Your name</label>
+              <input type="text" id="owner-name" required autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="email">Email address</label>
+              <input type="email" id="email" required autocomplete="email">
+            </div>
+            <div class="field">
+              <label for="mobile">Mobile number</label>
+              <input type="tel" id="mobile" placeholder="03XXXXXXXXX" required autocomplete="tel">
+            </div>
+            <div class="field">
+              <label for="password">Create a password</label>
+              <input type="password" id="password" required autocomplete="new-password">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="agency-checkout-submit">Continue to Checkout</button>
+            <p class="confirm-note" id="agency-checkout-status" style="min-height:1.2em; font-size:.82rem; color:var(--text-low); margin-top:12px;"></p>
+          </form>
+        </div>
+
+        <div>
+          <h3 style="margin-bottom:18px;">02 — How it works</h3>
+          <div class="bank-card">
+            <div class="bank-row"><span>Step 1</span><span>Submit this form</span></div>
+            <div class="bank-row"><span>Step 2</span><span>Redirect to Lemon Squeezy's secure checkout</span></div>
+            <div class="bank-row"><span>Step 3</span><span>Enter card details there</span></div>
+            <div class="bank-row"><span>Step 4</span><span>Log in and start adding creators to your roster</span></div>
+          </div>
+          <p class="confirm-note">Need more than 15 creators, or custom terms? <a href="agencies.html#contact-sales" style="color:var(--rust);">Talk to us directly</a> instead of using this form.</p>
+
+          <div id="agency-order-result" class="ref-code hidden" style="flex-direction:column; align-items:flex-start; gap:10px; margin-top:18px;">
+            <span id="agency-ref-code-value">—</span>
+            <span id="agency-order-summary" style="font-size:.78rem; color:var(--text-low);"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p style="text-align:center; margin-top:20px; font-size:.9rem; color:var(--text-low);">Already have an account? <a href="login.html" style="color:var(--rust);">Log in</a></p>
+  </div>
+</section>
+
+<form id="agency-payfast-redirect-form" method="POST" style="display:none;"></form>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>© 2026 SentryVo. All rights reserved.</span>
+      <span><a href="terms.html" style="color:inherit;">Terms</a> · <a href="privacy.html" style="color:inherit;">Privacy</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+<script>
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const tier = params.get('tier');
+    const select = document.getElementById('tier-select');
+    if (tier === 'agency_starter' || tier === 'agency_growth') select.value = tier;
+  })();
+
+  document.getElementById('agency-register-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('agency-checkout-submit');
+    const statusEl = document.getElementById('agency-checkout-status');
+
+    const tier = document.getElementById('tier-select').value;
+    const agencyName = document.getElementById('agency-name').value.trim();
+    const ownerName = document.getElementById('owner-name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const mobile = document.getElementById('mobile').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!agencyName || !ownerName || !email || !mobile || !password) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account…';
+    statusEl.textContent = '';
+
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/register/agency`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ agencyName, ownerName, email, mobile, password, tier }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Registration could not be started');
+
+      const resultPanel = document.getElementById('agency-order-result');
+      document.getElementById('agency-ref-code-value').textContent = agencyName;
+      document.getElementById('agency-order-summary').textContent = 'Redirecting to Lemon Squeezy…';
+      resultPanel.classList.remove('hidden');
+
+      window.location.href = data.checkoutUrl;
+    } catch (err) {
+      statusEl.textContent = err.message || 'Could not reach the server. Please try again in a moment.';
+      statusEl.style.color = '#0096F5';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Continue to Checkout';
+    }
+  });
+</script>
+</body>
+</html>

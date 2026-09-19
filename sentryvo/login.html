@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — SentryVo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="logo">
+      <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
+    </a>
+    <nav class="nav-links">
+      <a href="pricing.html">Pricing</a>
+    </nav>
+    <a href="register.html" class="nav-cta">Get Protected</a>
+  </div>
+</header>
+
+<section style="padding:90px 0;">
+  <div class="wrap" style="max-width:420px;">
+    <div style="background:var(--ink-2); border:1px solid var(--line); border-radius:16px; padding:40px;">
+      <h2 style="text-align:center; margin-bottom:6px;">Welcome back</h2>
+      <p class="lede" style="text-align:center; margin:0 auto 28px; font-size:.95rem;">Log in to your SentryVo dashboard.</p>
+      <form id="login-form">
+        <div class="field">
+          <label for="login-email">Email address</label>
+          <input type="email" id="login-email" required autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="login-submit">Log In</button>
+        <p class="confirm-note" id="login-status" style="min-height:1.2em; font-size:.82rem; color:var(--text-low); margin-top:12px; text-align:center;"></p>
+      </form>
+      <p style="text-align:center; font-size:.85rem; color:var(--text-low); margin-top:18px;">
+        <a href="forgot-password.html" style="color:var(--rust);">Forgot password?</a>
+      </p>
+      <p style="text-align:center; font-size:.85rem; color:var(--text-low); margin-top:8px;">
+        Don't have an account? <a href="register.html" style="color:var(--rust);">Get protected</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>© 2026 SentryVo. All rights reserved.</span>
+      <a href="https://x.com/SentryVo" target="_blank" rel="noopener noreferrer" style="color:inherit; display:inline-flex; align-items:center; margin:0 10px;" aria-label="SentryVo on X"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7.6 8.7L23 22h-6.9l-5.4-6.6L4.4 22H1.3l8.1-9.3L1 2h7l4.9 6.1L18.9 2Zm-1.2 18h1.9L7.4 4h-2l12.3 16Z"/></svg></a>
+      <span><a href="terms.html" style="color:inherit;">Terms</a> · <a href="privacy.html" style="color:inherit;">Privacy</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+<script>
+  document.getElementById('login-form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const statusEl = document.getElementById('login-status');
+    const submitBtn = document.getElementById('login-submit');
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Logging in…';
+    statusEl.textContent = '';
+
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include', // required so the session cookie is sent/stored
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      window.location.href = data.role === 'agency_owner' ? 'agency-dashboard.html' : 'dashboard.html';
+    } catch (err) {
+      statusEl.textContent = err.message || 'Could not log in. Please try again.';
+      statusEl.style.color = '#0096F5';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Log In';
+    }
+  });
+</script>
+</body>
+</html>

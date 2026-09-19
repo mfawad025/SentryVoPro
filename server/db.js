@@ -101,6 +101,28 @@ async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       expires_at TIMESTAMPTZ NOT NULL
     );
+
+    -- Forgot-password flow: a short-lived, single-use token emailed to the
+    -- account holder. Separate from sessions on purpose — a reset token
+    -- proves "I clicked the email link," not "I'm currently logged in," and
+    -- expires much sooner (1 hour vs 30 days).
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+
+    -- Manually-verified domain -> email lookup for takedown notices. Checked
+    -- FIRST, before the page-scrape or RDAP fallbacks in scanner.js — these
+    -- are human-confirmed working contacts, more trustworthy than anything
+    -- a script could infer automatically. Manageable via the
+    -- /api/admin/site-emails/* endpoints in index.js.
+    CREATE TABLE IF NOT EXISTS site_contact_emails (
+      domain TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 }
 // Run once at startup; index.js awaits this before accepting requests.
@@ -223,6 +245,49 @@ async function getSession(token) {
 
 async function deleteSession(token) {
   await pool.query(`DELETE FROM sessions WHERE token = $1`, [token]);
+}
+
+// ---------- Password reset tokens ----------
+async function createPasswordResetToken(token, userId, expiresAt) {
+  await pool.query(
+    `INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES ($1, $2, $3)`,
+    [token, userId, expiresAt]
+  );
+}
+
+async function getPasswordResetToken(token) {
+  const result = await pool.query(
+    `SELECT * FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW()`,
+    [token]
+  );
+  return result.rows[0] || null;
+}
+
+async function deletePasswordResetToken(token) {
+  await pool.query(`DELETE FROM password_reset_tokens WHERE token = $1`, [token]);
+}
+
+// ---------- Manually-verified site contact emails ----------
+async function getSiteContactEmail(domain) {
+  const result = await pool.query(`SELECT * FROM site_contact_emails WHERE domain = $1`, [domain]);
+  return result.rows[0] || null;
+}
+
+async function upsertSiteContactEmail(domain, email) {
+  await pool.query(
+    `INSERT INTO site_contact_emails (domain, email, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (domain) DO UPDATE SET email = $2, updated_at = NOW()`,
+    [domain, email]
+  );
+}
+
+async function deleteSiteContactEmail(domain) {
+  await pool.query(`DELETE FROM site_contact_emails WHERE domain = $1`, [domain]);
+}
+
+async function listSiteContactEmails() {
+  const result = await pool.query(`SELECT * FROM site_contact_emails ORDER BY domain ASC`);
+  return result.rows;
 }
 
 // ---------- Aliases ----------
@@ -359,6 +424,17 @@ async function deleteUser(userId) {
   return result.rows[0] || null;
 }
 
+// Resets a user's password to a new one you provide. Takes an already-hashed
+// password (index.js hashes it with bcrypt before calling this) — this
+// function never sees or stores a plain-text password itself.
+async function setUserPasswordHash(userId, passwordHash) {
+  const result = await pool.query(
+    `UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email`,
+    [passwordHash, userId]
+  );
+  return result.rows[0] || null;
+}
+
 module.exports = {
   pool,
   ready,
@@ -373,6 +449,13 @@ module.exports = {
   createSession,
   getSession,
   deleteSession,
+  createPasswordResetToken,
+  getPasswordResetToken,
+  deletePasswordResetToken,
+  getSiteContactEmail,
+  upsertSiteContactEmail,
+  deleteSiteContactEmail,
+  listSiteContactEmails,
   addAliases,
   getAliasesForUser,
   addOriginalLinks,
@@ -389,6 +472,7 @@ module.exports = {
   findUsersByAliasOrEmail,
   setUserStatus,
   deleteUser,
+  setUserPasswordHash,
   createAgency,
   getAgencyById,
   getAgencyOwner,

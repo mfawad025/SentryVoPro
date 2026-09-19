@@ -124,4 +124,28 @@ async function sendTestEmail(toAddress) {
   });
 }
 
-module.exports = { sendDailyReportEmail, buildReportHtml, sendTestEmail };
+async function sendPasswordResetEmail(toAddress, resetUrl) {
+  const mailer = getMailer();
+  if (!mailer) {
+    throw new Error('SMTP is not configured (SMTP_HOST is missing or still the placeholder value)');
+  }
+
+  await mailer.sendMail({
+    from: process.env.REPORT_FROM_EMAIL,
+    to: toAddress,
+    subject: 'Reset your SentryVo password',
+    text: `We received a request to reset your SentryVo password. Click the link below to choose a new one — this link expires in 1 hour and can only be used once.\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email — your password won't be changed.`,
+    html: `
+      <div style="font-family:Arial,sans-serif; max-width:480px; margin:0 auto; color:#1a1a2e;">
+        <h2 style="color:#0096F5;">Reset your SentryVo password</h2>
+        <p>We received a request to reset your password. Click the button below to choose a new one — this link expires in <strong>1 hour</strong> and can only be used once.</p>
+        <p style="margin:28px 0;">
+          <a href="${resetUrl}" style="background:#0096F5; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">Reset Password</a>
+        </p>
+        <p style="font-size:.85rem; color:#666;">If you didn't request this, you can safely ignore this email — your password won't be changed.</p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendDailyReportEmail, buildReportHtml, sendTestEmail, sendPasswordResetEmail };

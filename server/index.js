@@ -309,6 +309,76 @@ app.post('/api/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------- Forgot / reset password ----------------
+const RESET_TOKEN_DURATION_MS = 60 * 60 * 1000; // 1 hour
+
+app.post('/api/forgot-password', async (req, res) => {
+  try {
+    const email = req.body?.email;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await db.getUserByEmail(email);
+    // Deliberately the SAME response whether or not the account exists —
+    // this stops a visitor from using this form to check which email
+    // addresses have a SentryVo account (a real, if minor, privacy leak
+    // if the two cases returned different messages).
+    const genericResponse = {
+      ok: true,
+      message: 'If an account exists with that email, a password reset link has been sent.',
+    };
+
+    if (!user) {
+      return res.json(genericResponse);
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_DURATION_MS);
+    await db.createPasswordResetToken(token, user.id, expiresAt);
+
+    const siteUrl = process.env.SENTRYVO_SITE_URL || 'https://www.sentryvo.com';
+    const resetUrl = `${siteUrl}/reset-password.html?token=${token}`;
+
+    const { sendPasswordResetEmail } = require('./emailReport');
+    await sendPasswordResetEmail(user.email, resetUrl);
+
+    res.json(genericResponse);
+  } catch (err) {
+    console.error('Forgot-password error:', err.message);
+    // Still return the generic message even on an internal error, for the
+    // same account-enumeration reason as above — log the real error
+    // server-side instead of exposing it to the visitor.
+    res.json({ ok: true, message: 'If an account exists with that email, a password reset link has been sent.' });
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body || {};
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'token and newPassword are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Choose a password at least 6 characters long' });
+    }
+
+    const resetRecord = await db.getPasswordResetToken(token);
+    if (!resetRecord) {
+      return res.status(400).json({ error: 'This reset link is invalid or has expired. Request a new one.' });
+    }
+
+    const passwordHash = bcrypt.hashSync(newPassword, 10);
+    await db.setUserPasswordHash(resetRecord.user_id, passwordHash);
+    await db.deletePasswordResetToken(token); // single-use — can't be replayed
+
+    res.json({ ok: true, message: 'Password updated — you can log in with your new password now.' });
+  } catch (err) {
+    console.error('Reset-password error:', err.message);
+    res.status(500).json({ error: 'Could not reset your password. Please try again shortly.' });
+  }
+});
+
 // ---------------- Dashboard data (real, per logged-in user) ----------------
 // Both endpoints default to the logged-in user's own data. An agency owner
 // can pass ?userId=X to view a specific creator on their roster instead —
@@ -466,6 +536,19 @@ app.post('/api/agency/add-creator', requireAuth, async (req, res) => {
 });
 
 // ---------------- Manual trigger for testing the scan pipeline ----------------
+// GET version: just visit this URL directly in a browser, no extra tools needed.
+app.get('/api/scan/run-now', async (req, res) => {
+  try {
+    const { runDailyScanForAllUsers } = require('./scanner');
+    const results = await runDailyScanForAllUsers();
+    res.json({ ok: true, results });
+  } catch (err) {
+    console.error('Manual scan trigger failed:', err.message);
+    res.status(500).json({ error: 'Scan failed to run' });
+  }
+});
+
+// POST version, for anyone using a tool like Postman/curl instead.
 app.post('/api/scan/run-now', async (req, res) => {
   try {
     const { runDailyScanForAllUsers } = require('./scanner');
@@ -632,6 +715,228 @@ app.get('/api/admin/delete-user', async (req, res) => {
     res.json({ ok: true, message: `Permanently deleted user ${deleted.email} (id ${id}) and all associated data` });
   } catch (err) {
     console.error('Admin delete-user failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Usage: https://api.sentryvo.com/api/admin/reset-password?id=USER_ID&newPassword=SOMETHING&key=YOUR_ADMIN_KEY
+// Sets a new password for an account whose password was forgotten — keeps
+// all their data intact (unlike delete-user). The new password is hashed
+// with bcrypt before storage, same as at registration; it's never stored
+// or logged in plain text.
+app.get('/api/admin/reset-password', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const id = req.query?.id;
+    const newPassword = req.query?.newPassword;
+    if (!id || !newPassword) {
+      return res.status(400).json({ error: 'Add both ?id=USER_ID and &newPassword=SOMETHING to the URL' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Choose a password at least 6 characters long' });
+    }
+    const user = await db.getUserById(id);
+    if (!user) {
+      return res.status(404).json({ error: `No user found with id ${id}` });
+    }
+    const passwordHash = bcrypt.hashSync(newPassword, 10);
+    await db.setUserPasswordHash(id, passwordHash);
+    res.json({ ok: true, message: `Password reset for ${user.email} — you can log in with the new password now` });
+  } catch (err) {
+    console.error('Admin reset-password failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------- Site contact email lookup (manually verified) ----------------
+// Usage: https://api.sentryvo.com/api/admin/site-emails/list?key=YOUR_ADMIN_KEY
+app.get('/api/admin/site-emails/list', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const entries = await db.listSiteContactEmails();
+    res.json({ ok: true, count: entries.length, entries });
+  } catch (err) {
+    console.error('Admin site-emails/list failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Usage: https://api.sentryvo.com/api/admin/site-emails/add?domain=example.com&email=dmca@example.com&key=YOUR_ADMIN_KEY
+// Adds a new entry, or updates the email if that domain already exists —
+// this is how you add or change entries going forward, one at a time.
+app.get('/api/admin/site-emails/add', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const domain = req.query?.domain?.toLowerCase().replace(/^www\./, '');
+    const email = req.query?.email;
+    if (!domain || !email) {
+      return res.status(400).json({ error: 'Add both ?domain=example.com and &email=dmca@example.com to the URL' });
+    }
+    await db.upsertSiteContactEmail(domain, email);
+    res.json({ ok: true, message: `Saved: ${domain} -> ${email}` });
+  } catch (err) {
+    console.error('Admin site-emails/add failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Usage: https://api.sentryvo.com/api/admin/site-emails/delete?domain=example.com&key=YOUR_ADMIN_KEY
+app.get('/api/admin/site-emails/delete', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const domain = req.query?.domain?.toLowerCase().replace(/^www\./, '');
+    if (!domain) {
+      return res.status(400).json({ error: 'Add ?domain=example.com to the URL' });
+    }
+    await db.deleteSiteContactEmail(domain);
+    res.json({ ok: true, message: `Removed: ${domain}` });
+  } catch (err) {
+    console.error('Admin site-emails/delete failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// One-time bulk import of the 124 manually-verified domain/email pairs
+// supplied when this feature was built. Safe to run more than once —
+// upsertSiteContactEmail overwrites rather than duplicates. Visit this
+// URL once after deploying, then use /add and /delete above for anything
+// going forward instead of re-running this.
+// Usage: https://api.sentryvo.com/api/admin/site-emails/seed?key=YOUR_ADMIN_KEY
+app.get('/api/admin/site-emails/seed', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const seedData = [
+      { domain: 'leakedzone.com', email: 'contact.leakedzone@gmail.com' },
+      { domain: 'leakgallery.com', email: 'dmca@leakgallery.com' },
+      { domain: 'wildskirts.com', email: 'hello.wildskirts@gmail.com' },
+      { domain: 'fapomania.com', email: 'fapomania990+dmca@gmail.com' },
+      { domain: 'leaks4fap.com', email: 'abuseandpr@leaks4fap.com' },
+      { domain: 'rapelust.com', email: 'rapelust.com@gmail.com' },
+      { domain: 'playvids.com', email: 'legal@playvids.com' },
+      { domain: 'pornuvexa.com', email: 'sandleradams490@gmail.com' },
+      { domain: 'pornvod18.com', email: 'breckieh07@gmail.com' },
+      { domain: 'nudevista.net', email: 'dmca@nudevista.com' },
+      { domain: 'youjizz.com', email: 'youjizzadmin@gmail.com' },
+      { domain: 'motherless.xxx', email: 'dmca@motherless.xxx' },
+      { domain: 'eporner.com', email: 'notice@dmcanow.io' },
+      { domain: 'cz.thefappening.plus', email: 'johnstevensonday+dmca@gmail.com' },
+      { domain: 'porno.supply', email: 'help@porno.supply' },
+      { domain: 'bunkr.cr', email: 'support@bunker.services' },
+      { domain: 'forums.socialmediagirls.com', email: 'socialmediagirls-takedown@proton.me' },
+      { domain: 'fotosdemujeresdesnudas.com', email: 'notice@fotosdemujeresdesnudas.com' },
+      { domain: 'topfapgirlspics.com', email: 'piava@topfapgirlspics.com' },
+      { domain: 'masterfap.net', email: 'dmcamasterfap@protonmail.com' },
+      { domain: 'fapexy.com', email: 'fapexyweb@gmail.com' },
+      { domain: 'bilibili.com', email: 'legal-notice@bilibili.com' },
+      { domain: 'reddxxx.com', email: 'contact@reddxxx.com' },
+      { domain: 'shemalevids.org', email: 'shemalevids.reuploads@proton.me' },
+      { domain: 'transporn.cc', email: 'alesldvnikv@gmail.com' },
+      { domain: 'xxx-porn-hub.com', email: 'copyright@xxx-porn-hub.com' },
+      { domain: 'tubegalore.com', email: 'dmca@tubetraffic.com' },
+      { domain: 'fapellino.com', email: 'fapellino@gmail.com' },
+      { domain: 'ibj.tw', email: 'abuse@onlyfuns.win' },
+      { domain: 'imagenespng.net', email: 'abuse@cutefans.win' },
+      { domain: 'picazor.com', email: 'dmca@picazor.com' },
+      { domain: 'tyler-brown.com', email: 'abuse@tyler-brown.com' },
+      { domain: 'iceporn.com', email: 'copyright@iceporn.com' },
+      { domain: 'of.celebexposed.com', email: 'contact@of.celebexposed.com' },
+      { domain: 'fapachi.com', email: 'adminfap@fapachi.com' },
+      { domain: 'pimpbunny.com', email: 'valevy00z@gmail.com' },
+      { domain: 'fapmenu.com', email: 'admincrew@fapmenu.com' },
+      { domain: 'ilovnudes.com', email: 'shreyasharmasky@gmail.com' },
+      { domain: 'actionviewphotography.com', email: 'abuse@actionviewphotography.com' },
+      { domain: 'mym-db.com', email: 'contact@mym-db.com' },
+      { domain: 'ashemaletube.com', email: 'dmca@ashemaletube.com' },
+      { domain: 'mat6tube.com', email: 'abuse@mat6tube.com' },
+      { domain: 'noodlemagazine.com', email: 'abuse@noodlemagazine.com' },
+      { domain: 'senjo-pianist.jp', email: 'abuse@cutefans.win' },
+      { domain: 'ukdevilz.com', email: 'abuse@ukdevilz.com' },
+      { domain: 'simpthots.com', email: 'simpthots@proton.me' },
+      { domain: 'infotourism.news', email: 'contact@cutefans.win' },
+      { domain: 'erome.com', email: 'contact@erome.com' },
+      { domain: 'thefappening2015.com', email: 'lamelamer8@gmail.com' },
+      { domain: 'fap.thefappening.one', email: 'lamelamer8@gmail.com' },
+      { domain: 'fuckingdate.net', email: 'dmca@fuckingdate.net' },
+      { domain: 'glamourhound.com', email: 'dmca@glamourhound.com' },
+      { domain: 'hdporn.pics', email: 'abuse@hdporn.pics' },
+      { domain: 'nsfw.xxx', email: 'abuse@nsfw.xxx' },
+      { domain: 'nudegirls.wiki', email: 'abuse@nudegirls.wiki' },
+      { domain: 'pornpics.click', email: 'help@pornpics.click' },
+      { domain: 'xpics.me', email: 'help@xpics.me' },
+      { domain: 'fapezy.com', email: 'fapezyofficial@gmail.com' },
+      { domain: 'fapodrop.com', email: 'abusedrop@fapodrop.com' },
+      { domain: 'theasmrindex.com', email: 'info@theasmrindex.com' },
+      { domain: 'fapeza.com', email: 'fapezan@gmail.com' },
+      { domain: 'kemono.su', email: 'legal@kemono.su' },
+      { domain: 'thefapomania.info', email: 'fapomania990@gmail.com' },
+      { domain: 'nudostar.com', email: 'nudodmca@gmail.com' },
+      { domain: 'rndigitalprint.pk', email: 'abuse@cutefans.win' },
+      { domain: 'thefappeningblog.com', email: 'thefappeningabuses@gmail.com' },
+      { domain: 'fapopedia-net.zproxy.org', email: 'johnnysinsmom@gmail.com' },
+      { domain: 'fapopedia.net', email: 'johnnysinsmom@gmail.com' },
+      { domain: 'nudostar.tv', email: 'johnnysinsmom@gmail.com' },
+      { domain: 'topfapgirls1.com', email: 'piava@topfapgirls1.com' },
+      { domain: 'faponic.com', email: 'faponic@gmail.com' },
+      { domain: 'cambb.xxx', email: 'info@cambb.xxx' },
+      { domain: 'emart.cl', email: 'abuse@cutefans.win' },
+      { domain: 'sushikoi.mx', email: 'abuse@cutefans.win' },
+      { domain: 'nudogram.com', email: 'nudogram@gmail.com' },
+      { domain: 'erothots.co', email: 'erothots@proton.me' },
+      { domain: 'leakedmodels.com', email: 'leakedmodmca@gmail.com' },
+      { domain: 'fappeningbook.com', email: 'lopapopator@gmail.com' },
+      { domain: 'thefap.org', email: 'dmca@thefap.org' },
+      { domain: 'sexiezpix.com', email: 'hdpic2020@gmail.com' },
+      { domain: 'thefappening.plus', email: 'johnstevensonday@gmail.com' },
+      { domain: 'fapello.com', email: 'johnfapello@gmail.com' },
+      { domain: 'criew.com', email: 'criewstats@gmail.com' },
+      { domain: 'yufap.com', email: 'legalyufap@gmail.com' },
+      { domain: 'shemaleleaks.com', email: 'shemalesdmca@gmail.com' },
+      { domain: 'radio-gold.rs', email: 'abuse@cutefans.win' },
+      { domain: 'a-lohas.jp', email: 'abuse@cutefans.win' },
+      { domain: 'amaporn.com', email: 'dmca@amaporn.com' },
+      { domain: 'ebonygalore.com', email: 'dmca@adultwebmasternet.com' },
+      { domain: 'ebony8.com', email: 'dmcalegalreport@gmail.com' },
+      { domain: 'exporntoons.net', email: 'abuse@exporntoons.net' },
+      { domain: 'allpornimages.com', email: 'report@allpornimages.com' },
+      { domain: 'analpics.org', email: 'contact@analpics.org' },
+      { domain: 'asspictures.org', email: 'andrew.webm@protonmail.com' },
+      { domain: 'boobspics.org', email: 'contact@boobspics.org' },
+      { domain: 'freepornpicss.com', email: 'dmca@freepornpicss.com' },
+      { domain: 'gfpornpictures.com', email: 'dmca@gfpornpictures.com' },
+      { domain: 'givemeporn.club', email: 'mzx001@pm.me' },
+      { domain: 'gonewildarchive.net', email: 'gwarchive@protonmail.com' },
+      { domain: 'hdnudes.net', email: 'andrew.webm@protonmail.com' },
+      { domain: 'lesbianpics.org', email: 'andrew.webm@protonmail.com' },
+      { domain: 'nude-pics.net', email: 'contact@nude-pics.net' },
+      { domain: 'nude-pics.org', email: 'report@nude-pics.org' },
+      { domain: 'nudeteen.org', email: 'andrew.webm@protonmail.com' },
+      { domain: 'nudeporn.org', email: 'andrew.webm@protonmail.com' },
+      { domain: 'onlyaccounts.io', email: 'contact@onlyaccounts.io' },
+      { domain: 'pornr.net', email: 'contact@pornr.net' },
+      { domain: 'qckprn.com', email: 'qckprn@gmail.com' },
+      { domain: 'redd.tube', email: 'copy@reddit.tube' },
+      { domain: 'scrolller.com', email: 'report@scrolller.com' },
+      { domain: 'sexbizlaw.com', email: 'contact@sexbizlaw.com' },
+      { domain: 'sexpornpictures.com', email: 'dmca@sexpornpictures.com' },
+      { domain: 'sexypictures.org', email: 'andrew.webm@protonmail.com' },
+      { domain: 'sexypornpictures.org', email: 'report@sexypornpictures.org' },
+      { domain: 'smutty.com', email: 'dmca@smutty.com' },
+      { domain: 'super-porn.net', email: 'watchporn.net@gmail.com' },
+      { domain: 'thefap.net', email: 'monster98.tk@gmail.com' },
+      { domain: 'thefaphub.com', email: 'support@thefaphub.com' },
+      { domain: 'watch-porn.net', email: 'watchporn.net@gmail.com' },
+      { domain: 'watchporn.pics', email: 'dmca@watchporn.pics' },
+      { domain: 'xxxnudes.net', email: 'andrew.webm@protonmail.com' },
+      { domain: 'xxxscroll.com', email: 'info@xxxscroll.com' },
+      { domain: 'xxxpornpics.net', email: 'contact@xxxpornpics.net' },
+      { domain: 'fapshots.com', email: 'admin@fapshots.com' },
+    ];
+    for (const { domain, email } of seedData) {
+      await db.upsertSiteContactEmail(domain, email);
+    }
+    res.json({ ok: true, message: `Seeded ${seedData.length} domain/email pairs` });
+  } catch (err) {
+    console.error('Admin site-emails/seed failed:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

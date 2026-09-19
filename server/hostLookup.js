@@ -106,4 +106,37 @@ async function lookupHostingAndAbuseContacts(url) {
   return result;
 }
 
-module.exports = { lookupHostingAndAbuseContacts };
+/**
+ * Looks for an email address published directly on the leak page itself —
+ * many leak/tube/aggregator sites list a contact or DMCA email somewhere on
+ * the page (footer, header, contact block) even without a dedicated /contact
+ * page. This is often a better target than a generic hosting-provider abuse
+ * mailbox, since it's more likely to actually be monitored by whoever runs
+ * the site.
+ *
+ * Deliberately scoped to just the leak URL itself, not a deeper site crawl
+ * (no following links to a separate /contact or /dmca page) — keeps this
+ * fast and avoids scanning pages that could be behind different rules
+ * (paywalls, logins, robots.txt). If nothing is found here, the caller
+ * falls back to RDAP / a guessed abuse@ address.
+ */
+async function findSiteContactEmail(url) {
+  try {
+    const res = await fetch(url, { timeout: 8000 });
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const matches = Array.from(new Set(html.match(emailPattern) || []));
+    if (!matches.length) return null;
+
+    // Prefer anything that looks purpose-built for takedowns over a random
+    // address that might just be a support/sales contact.
+    const priority = matches.find((email) => /dmca|abuse|legal|copyright/i.test(email));
+    return priority || matches[0];
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { lookupHostingAndAbuseContacts, findSiteContactEmail };

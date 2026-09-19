@@ -23,8 +23,8 @@ const nodemailer = require('nodemailer');
 const { searchGoogle, searchGoogleImages } = require('./googleSearch');
 const db = require('./db');
 const { sendDailyReportEmail } = require('./emailReport');
-const { lookupHostingAndAbuseContacts } = require('./hostLookup');
-const { GOOGLE_REMOVAL_TOOL_URL } = require('./constants');
+const { lookupHostingAndAbuseContacts, findSiteContactEmail } = require('./hostLookup');
+const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform } = require('./constants');
 
 // Google does not offer a public API for third parties to submit copyright
 // removal requests — their "Remove content from Google" tool is a web form
@@ -116,41 +116,122 @@ function getMailer() {
   });
 }
 
-async function attemptTakedownNotice(leak, user) {
-  const mailer = getMailer();
-  if (!mailer) return false;
+/**
+ * Attempts an automated takedown notice — but ONLY for independent/generic
+ * sites (fapello-style leak aggregators, small tube sites, random hosts).
+ *
+ * Major platforms (YouTube, TikTok, Facebook, Instagram, X, Reddit,
+ * Pinterest, etc.) are deliberately EXCLUDED from this automated path.
+ * Two real reasons, not just caution:
+ *   1. Emailing their hosting provider accomplishes nothing — the hosting
+ *      company (e.g. Google for YouTube) has no ability to act on a
+ *      generic infrastructure abuse mailbox; these platforms require using
+ *      their own dedicated in-house copyright/report forms instead.
+ *   2. Actually automating submission through those forms would mean
+ *      scripting a login-gated, anti-bot-protected web form — fragile,
+ *      likely to break constantly, and a real risk of violating those
+ *      platforms' terms of service around automated access.
+ * Instead, major-platform leaks are marked 'manual_review' and surface in
+ * the Excel report with a direct link to that platform's actual reporting
+ * form, so the admin can submit it by hand in seconds instead of hunting
+ * for the right form.
+ *
+ * Finding a contact email for a generic site, in priority order:
+ *   1. The manually-verified site_contact_emails table — human-confirmed
+ *      working contacts, more trustworthy than anything below. Manage this
+ *      list via the /api/admin/site-emails/* endpoints in index.js.
+ *   2. An email published on the leak page's own HTML (dmca@/abuse@-style
+ *      addresses preferred if present).
+ *   3. RDAP-derived hosting/registrar abuse contact.
+ *   4. A guessed abuse@<hostname> as a last resort.
+ *
+ * Returns { sent: boolean, reason?: string } instead of a plain boolean so
+ * the caller can distinguish "skipped because major platform" from
+ * "genuinely failed to find a contact."
+ */
+async function attemptTakedownNotice(leak, user, originalLinks) {
+  if (isMajorPlatform(leak.url)) {
+    return { sent: false, reason: 'major_platform' };
+  }
 
-  // Best-effort: look up the real hosting provider / registrar abuse contact
-  // via RDAP first (more likely to reach someone who can actually act), and
-  // fall back to the guessed abuse@<hostname> address if RDAP has nothing.
+  const mailer = getMailer();
+  if (!mailer) return { sent: false, reason: 'no_mailer' };
+
   let hostingOrg = null;
   let targetEmails = [];
+
+  // Step 1: manually-verified list — checked first, most trustworthy.
+  try {
+    const hostname = new URL(leak.url).hostname.replace(/^www\./, '').toLowerCase();
+    const verified = await db.getSiteContactEmail(hostname);
+    if (verified) targetEmails = [verified.email];
+  } catch {
+    // Unparseable URL — fall through to the other steps, which will also
+    // fail gracefully and ultimately return no_contact_found below.
+  }
+
+  // Step 2: an email published on the leak page itself.
+  if (!targetEmails.length) {
+    const siteContactEmail = await findSiteContactEmail(leak.url);
+    if (siteContactEmail) targetEmails = [siteContactEmail];
+  }
+
+  // Step 3: RDAP-derived hosting/registrar contact (also used for the
+  // "hosting provider" display field regardless of whether it supplies
+  // an email — steps 1 and 2 above may already have one).
   try {
     const lookup = await lookupHostingAndAbuseContacts(leak.url);
     hostingOrg = lookup.hostingOrg || lookup.registrarOrg;
-    targetEmails = lookup.abuseEmails;
+    if (!targetEmails.length) targetEmails = lookup.abuseEmails;
   } catch (err) {
     console.warn(`RDAP lookup failed for ${leak.url}:`, err.message);
   }
   if (hostingOrg) await db.setLeakHostingProvider(leak.id, hostingOrg);
 
+  // Step 4: guessed fallback.
   if (!targetEmails.length) {
     const guessed = guessAbuseEmail(leak.url);
     if (guessed) targetEmails = [guessed];
   }
-  if (!targetEmails.length) return false;
+  if (!targetEmails.length) return { sent: false, reason: 'no_contact_found' };
+
+  // Notice content follows the standard DMCA §512(c)(3) required elements:
+  // (1) identification of the copyrighted work, (2) identification of the
+  // infringing material with its exact URL, (3) contact information for the
+  // person submitting the notice, (4) a good-faith-belief statement, (5) an
+  // accuracy/authority statement made under penalty of perjury, and (6) a
+  // signature. The notice is filed by SentryVo as the rights holder's
+  // authorized agent — see DMCA_AGENT_* in .env for the filer's real name,
+  // address, and email used below, which the agent (not each individual
+  // creator) is legally responsible for keeping accurate.
+  const agentName = process.env.DMCA_AGENT_NAME || '[DMCA_AGENT_NAME not set]';
+  const agentAddress = process.env.DMCA_AGENT_ADDRESS || '[DMCA_AGENT_ADDRESS not set]';
+  const agentEmail = process.env.DMCA_AGENT_EMAIL || process.env.REPORT_FROM_EMAIL;
+
+  const originalWorkLine = originalLinks?.length
+    ? `The copyrighted work at issue is original content created by ${user.name}. Representative example(s) of the original, authorized work can be found at:\n${originalLinks.join('\n')}`
+    : `The copyrighted work at issue is original content created by ${user.name}.`;
 
   const subject = `DMCA Takedown Notice — ${leak.url}`;
   const body = [
     `This is a formal DMCA takedown notice under 17 U.S.C. §512.`,
     ``,
-    `I am submitting this notice on behalf of the rights holder, ${user.name}, regarding copyrighted content published without authorization at:`,
+    `I am ${agentName}, submitting this notice as the authorized agent acting on behalf of the copyright owner, ${user.name}, regarding copyrighted content published without authorization at the following URL:`,
     leak.url,
     ``,
-    `The content infringes on copyrighted material owned by ${user.name}. I have a good faith belief that use of this material is not authorized by the copyright owner, its agent, or the law.`,
-    `I swear, under penalty of perjury, that the information in this notice is accurate and that I am authorized to act on behalf of the copyright owner.`,
+    originalWorkLine,
+    ``,
+    `I have a good faith belief that use of this material in the manner complained of is not authorized by the copyright owner, its agent, or the law.`,
+    `I swear, under penalty of perjury, that the information in this notice is accurate and that I am authorized to act on behalf of the owner of the copyright that is allegedly infringed.`,
     ``,
     `Please remove or disable access to this content as soon as possible.`,
+    ``,
+    `Contact information for the person submitting this notice:`,
+    `Name: ${agentName}`,
+    `Address: ${agentAddress}`,
+    `Email: ${agentEmail}`,
+    ``,
+    `Electronically Signed: ${agentName}`,
     ``,
     `Reference: SentryVo case for ${user.email}`,
   ].join('\n');
@@ -162,10 +243,10 @@ async function attemptTakedownNotice(leak, user) {
       subject,
       text: body,
     });
-    return true;
+    return { sent: true };
   } catch (err) {
     console.warn(`Takedown notice failed for ${leak.url}:`, err.message);
-    return false;
+    return { sent: false, reason: 'send_failed' };
   }
 }
 
@@ -206,7 +287,7 @@ async function runDailyScanForUser(user) {
               userId: user.id,
               url: result.url,
               title: result.title,
-              source: 'google_cse_web',
+              source: 'serper_web',
               matchedAlias: alias,
             });
           }
@@ -227,7 +308,7 @@ async function runDailyScanForUser(user) {
               userId: user.id,
               url: result.url,
               title: result.title,
-              source: 'google_cse_image',
+              source: 'serper_image',
               matchedAlias: alias,
             });
           }
@@ -238,11 +319,20 @@ async function runDailyScanForUser(user) {
     }
   }
 
-  // Attempt takedown notices for anything newly found
+  // Attempt takedown notices for anything newly found — automated only for
+  // independent/generic sites; major platforms are flagged for manual
+  // review instead (see the comment on attemptTakedownNotice for why).
   const newlyFound = await db.getLeaksByStatus(user.id, 'found');
   for (const leak of newlyFound) {
-    const sent = await attemptTakedownNotice(leak, user);
-    if (sent) await db.markLeakStatus(leak.id, 'reported');
+    const result = await attemptTakedownNotice(leak, user, originalLinks);
+    if (result.sent) {
+      await db.markLeakStatus(leak.id, 'reported');
+    } else if (result.reason === 'major_platform') {
+      await db.markLeakStatus(leak.id, 'manual_review');
+    }
+    // Any other reason (no contact found, send failed, no mailer configured)
+    // leaves the leak as 'found' — it'll be retried on the next scan rather
+    // than silently marked as handled.
   }
 
   // Recheck previously-reported leaks for removal

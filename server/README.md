@@ -15,7 +15,7 @@ Handles:
 ## Free scan tool (public homepage)
 
 The hero section has a real, working free-scan box — no login required.
-It's a genuine Google Custom Search query, not a mockup, so it draws from
+It's a genuine Serper.dev query, not a mockup, so it draws from
 the same quota as your daily subscriber scans. Two layers of protection:
 
 - **Per visitor**: 3 scans per IP per day
@@ -85,11 +85,18 @@ webhook secret is all you need. (An API key would only be needed if you
 later want to generate checkouts dynamically instead of via query params,
 or build a customer portal integration.)
 
-### Google Custom Search, Email
+### Serper.dev, Email
 
 Same as before — see the comments in `env.example.txt`. If left
 unconfigured, scans log a warning and skip, and report emails print to the
 console instead of sending, so you can still test the rest of the flow.
+
+**Note if you're updating from an older version of this backend**: this
+used to run on Google Custom Search directly. That was switched to
+Serper.dev because Google stopped allowing new Custom Search engines to
+search the whole web (capped to ~50 manually listed sites as of January
+2026) — Serper.dev proxies real, unrestricted Google results instead, with
+no such cap.
 
 ## Run locally
 
@@ -142,25 +149,53 @@ can wire up for you.
 
 ## What's real vs. best-effort here
 
-- **Finding leaks**: real, via Google Custom Search (both web and image
-  search). Text-based and reverse-lookup-by-description only — it won't
-  recognize a leaked photo by its pixels the way a reverse-image or facial
-  recognition API would. That's a future upgrade, not a rewrite — add
-  another search function next to `googleSearch.js` and call it from
-  `scanner.js`.
+- **Finding leaks**: real, via Serper.dev (both web and image search,
+  unrestricted — not limited to a curated site list). Text-based and
+  reverse-lookup-by-description only — it won't recognize a leaked photo
+  by its pixels the way a reverse-image or facial recognition API would.
+  That's a future upgrade, not a rewrite — add another search function
+  next to `googleSearch.js` and call it from `scanner.js`.
 - **A subscriber's own official pages never get flagged as leaks** —
   `scanner.js`'s `isOwnContent()` checks every search result against the
   original-content links they submitted at signup (exact URL or same
   domain) before ever inserting it as a leak. This matters for creators
   active on multiple official platforms — make sure they list all of them
   at registration, not just one.
-- **Filing takedowns**: looks up real abuse contacts via RDAP where
-  possible, falls back to a guessed `abuse@<hostname>` otherwise, and emails
-  a templated DMCA notice either way. Many hosts don't monitor either
-  address or require a web form instead — treat "reported" as "attempted,"
-  not "delivered and acted on."
+- **Filing takedowns — split by site type, this matters**:
+  - **Generic/independent sites** (leak aggregators, small tube sites,
+    random hosts): real automated attempt. First tries to find a contact
+    email actually published on the leak page itself (`findSiteContactEmail`
+    in `hostLookup.js` — looks for a `dmca@`/`abuse@`-style address in the
+    page's own HTML), then falls back to RDAP-derived hosting/registrar
+    abuse contacts, then a guessed `abuse@<hostname>` as a last resort.
+    Many hosts still don't monitor any of these — treat "reported" as
+    "attempted," not "delivered and acted on."
+  - **Major platforms** (YouTube, TikTok, Facebook, Instagram, X, Reddit,
+    Pinterest, Tumblr, LinkedIn, Snapchat — see `MAJOR_PLATFORM_DOMAINS` in
+    `constants.js`): **deliberately NOT automated**. Emailing their hosting
+    provider (e.g. Google, for YouTube) accomplishes nothing — these
+    platforms require using their own dedicated copyright/report forms.
+    Actually automating submission through those forms would mean
+    scripting a login-gated, anti-bot-protected page — fragile, and a real
+    risk of violating those platforms' terms of service. Instead these
+    leaks are marked `manual_review` and show up in the Excel report's
+    "Manual Review - Platforms" tab with a direct link to the correct
+    form for that specific platform.
 - **Confirming removal**: a simple HTTP status recheck. A signal, not proof.
-- **Google delisting**: manual, by design — see above. Not automated.
+- **Google delisting (search result removal, not hosting-level takedown)**:
+  manual, by design — see above. Not automated. Image-search leaks from
+  non-major-platform sites get their own "Manual Review - Google Images"
+  tab in the Excel report with a direct link to Google's removal tool,
+  since delisting from Google Images is a separate action from whatever
+  happened at the hosting level.
+- **A note on testing the Excel report specifically**: the tab-splitting
+  logic (`excelReport.js`) was verified through careful manual review
+  against ExcelJS's documented API, but wasn't executed end-to-end in the
+  environment this was built in (no network access there to install
+  dependencies). Run one real scan after deploying and open the resulting
+  Excel file to confirm all 5 tabs (All Leaks Found, Auto-Reported,
+  Manual Review - Platforms, Manual Review - Google Images, Summary) look
+  right before relying on it.
 - **Payment → active account**: depends entirely on the Lemon Squeezy
   webhook actually reaching your server and the signature verifying. Test
   this thoroughly in Lemon Squeezy's test mode before going live — if the
@@ -179,6 +214,6 @@ can wire up for you.
   Alternative: use an external cron service (e.g. cron-job.org, free) to hit
   `/api/scan/run-now` on a schedule instead of relying on `node-cron` inside
   a sleeping process.
-- Watch your Google Custom Search quota (100 free queries/day) — the query
-  count per subscriber scales with how many aliases and platforms they have,
-  so budget accordingly as you grow.
+- Watch your Serper.dev usage (2,500 free queries on signup, ~$1/1,000
+  after) — the query count per subscriber scales with how many aliases and
+  platforms they have, so budget accordingly as you grow.

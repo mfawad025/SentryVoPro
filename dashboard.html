@@ -188,7 +188,7 @@
       } else {
         rowsEl.innerHTML = leaks.map((leak) => `
           <tr>
-            <td>${leak.source === 'google_cse_image' ? 'Google Images' : 'Web'}</td>
+            <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
             <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
             <td>${statusBadgeHtml(leak.status)}</td>
             <td>${new Date(leak.found_at).toLocaleDateString()}</td>

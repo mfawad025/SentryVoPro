@@ -1,0 +1,525 @@
+/**
+ * Daily scan + takedown pipeline for one user.
+ *
+ * Flow: search each of the user's aliases -> record new leaks -> attempt an
+ * automatic best-effort takedown notice -> recheck previously-reported leaks
+ * to see if they've come down -> return a summary for the email report.
+ *
+ * IMPORTANT CAVEATS (read before relying on this in production):
+ * - "Automatic takedown" here means emailing a best-effort guessed abuse
+ *   contact (abuse@<hostname>) with a templated DMCA notice. Many hosts
+ *   don't use that address, require a web form instead, or need a human to
+ *   review evidence first. Treat the "reported" status as "a notice was
+ *   attempted," not "guaranteed delivered to the right recipient" — the
+ *   WardMark case-file review process (or your own manual review) is still
+ *   the reliable path for anything that matters.
+ * - "Removed" detection here is a simple HTTP status recheck. A host can
+ *   return 200 while still showing the content in some other way (behind a
+ *   login wall, cached, etc.), so treat this as a signal, not certainty.
+ */
+require('dotenv').config();
+const fetch = require('node-fetch');
+const nodemailer = require('nodemailer');
+const { searchGoogle, searchGoogleImages } = require('./googleSearch');
+const db = require('./db');
+const { sendDailyReportEmail } = require('./emailReport');
+const { lookupHostingAndAbuseContacts, findSiteContactEmail, extractMediaLinksFromPage } = require('./hostLookup');
+const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform } = require('./constants');
+
+// Google does not offer a public API for third parties to submit copyright
+// removal requests — their "Remove content from Google" tool is a web form
+// (https://reportcontent.google.com), typically requiring the reporter to
+// fill it in directly, sometimes per-URL. Automating actual submission
+// would mean scripting a login-gated web form, which is fragile and against
+// Google's terms of service — so this is NOT automated. Instead, every
+// report includes a ready reference link so submitting manually takes
+// seconds instead of research time.
+
+// Known leak-prone destinations worth checking specifically, beyond a plain
+// web search. Extend this list as you learn where your subscribers' content
+// tends to turn up.
+const LEAK_PRONE_SITES = ['reddit.com', 't.me', 'x.com', 'tumblr.com'];
+
+function buildTextQueries(alias, platforms) {
+  const queries = [
+    `"${alias}" leaked`,
+    `"${alias}" leaked photos OR videos`,
+  ];
+  // One query per platform the subscriber is actually on — sharper signal
+  // than a generic query, and keeps quota usage proportional to relevance.
+  platforms.forEach((platform) => {
+    queries.push(`"${alias}" ${platform} leaked`);
+  });
+  // Site-restricted checks across common re-posting/leak destinations
+  LEAK_PRONE_SITES.forEach((site) => {
+    queries.push(`"${alias}" site:${site}`);
+  });
+  return queries;
+}
+
+function buildImageQueries(alias) {
+  return [`"${alias}" leaked photos`];
+}
+
+function guessAbuseEmail(url) {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return `abuse@${hostname}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks whether a search result is actually the creator's OWN official
+ * content — never something to flag as a leak or takedown target.
+ *
+ * A creator often posts on multiple official platforms (their own OnlyFans,
+ * Fansly, a personal site, etc.), submitted at signup as "original content
+ * links" specifically as proof of ownership. Without this check, a daily
+ * scan would eventually find and re-flag those same official pages as
+ * "leaks" and even attempt to send a DMCA takedown notice against the
+ * creator's own legitimate account — which would be both wrong and
+ * embarrassing. This matches two ways, deliberately broad:
+ *   1. Exact URL match against a submitted original link
+ *   2. Same hostname as a submitted original link (covers the same site
+ *      showing up with a different path, tracking params, http vs https,
+ *      or www vs non-www)
+ */
+function isOwnContent(resultUrl, originalLinks) {
+  let resultHost;
+  try {
+    resultHost = new URL(resultUrl).hostname.replace(/^www\./, '');
+  } catch {
+    return false;
+  }
+
+  for (const ownUrl of originalLinks) {
+    if (ownUrl === resultUrl) return true;
+    try {
+      const ownHost = new URL(ownUrl).hostname.replace(/^www\./, '');
+      if (ownHost && ownHost === resultHost) return true;
+    } catch {
+      // Not a parseable URL — skip host comparison for this entry
+    }
+  }
+  return false;
+}
+
+function getMailer() {
+  if (!process.env.SMTP_HOST || process.env.SMTP_HOST === 'smtp.yourprovider.com') return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT) === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+}
+
+/**
+ * Attempts an automated takedown notice — but ONLY for independent/generic
+ * sites (fapello-style leak aggregators, small tube sites, random hosts).
+ *
+ * Major platforms (YouTube, TikTok, Facebook, Instagram, X, Reddit,
+ * Pinterest, etc.) are deliberately EXCLUDED from this automated path.
+ * Two real reasons, not just caution:
+ *   1. Emailing their hosting provider accomplishes nothing — the hosting
+ *      company (e.g. Google for YouTube) has no ability to act on a
+ *      generic infrastructure abuse mailbox; these platforms require using
+ *      their own dedicated in-house copyright/report forms instead.
+ *   2. Actually automating submission through those forms would mean
+ *      scripting a login-gated, anti-bot-protected web form — fragile,
+ *      likely to break constantly, and a real risk of violating those
+ *      platforms' terms of service around automated access.
+ * Instead, major-platform leaks are marked 'manual_review' and surface in
+ * the Excel report with a direct link to that platform's actual reporting
+ * form, so the admin can submit it by hand in seconds instead of hunting
+ * for the right form.
+ *
+ * Finding a contact email for a generic site, in priority order:
+ *   1. The manually-verified site_contact_emails table — human-confirmed
+ *      working contacts, more trustworthy than anything below. Manage this
+ *      list via the /api/admin/site-emails/* endpoints in index.js.
+ *   2. An email published on the leak page's own HTML (dmca@/abuse@-style
+ *      addresses preferred if present).
+ *   3. RDAP-derived hosting/registrar abuse contact.
+ *   4. A guessed abuse@<hostname> as a last resort.
+ *
+ * Returns { sent: boolean, reason?: string } instead of a plain boolean so
+ * the caller can distinguish "skipped because major platform" from
+ * "genuinely failed to find a contact."
+ */
+async function attemptTakedownNotice(leak, user, originalLinks) {
+  if (isMajorPlatform(leak.url)) {
+    return { sent: false, reason: 'major_platform' };
+  }
+
+  const mailer = getMailer();
+  if (!mailer) return { sent: false, reason: 'no_mailer' };
+
+  let hostingOrg = null;
+  let targetEmails = [];
+
+  // Step 1: manually-verified list — checked first, most trustworthy.
+  try {
+    const hostname = new URL(leak.url).hostname.replace(/^www\./, '').toLowerCase();
+    const verified = await db.getSiteContactEmail(hostname);
+    if (verified) targetEmails = [verified.email];
+  } catch {
+    // Unparseable URL — fall through to the other steps, which will also
+    // fail gracefully and ultimately return no_contact_found below.
+  }
+
+  // Step 2: an email published on the leak page itself.
+  if (!targetEmails.length) {
+    const siteContactEmail = await findSiteContactEmail(leak.url);
+    if (siteContactEmail) targetEmails = [siteContactEmail];
+  }
+
+  // Step 3: RDAP-derived hosting/registrar contact (also used for the
+  // "hosting provider" display field regardless of whether it supplies
+  // an email — steps 1 and 2 above may already have one).
+  try {
+    const lookup = await lookupHostingAndAbuseContacts(leak.url);
+    hostingOrg = lookup.hostingOrg || lookup.registrarOrg;
+    if (!targetEmails.length) targetEmails = lookup.abuseEmails;
+  } catch (err) {
+    console.warn(`RDAP lookup failed for ${leak.url}:`, err.message);
+  }
+  if (hostingOrg) await db.setLeakHostingProvider(leak.id, hostingOrg);
+
+  // Step 4: guessed fallback.
+  if (!targetEmails.length) {
+    const guessed = guessAbuseEmail(leak.url);
+    if (guessed) targetEmails = [guessed];
+  }
+  if (!targetEmails.length) return { sent: false, reason: 'no_contact_found' };
+
+  // Notice content follows the standard DMCA §512(c)(3) required elements:
+  // (1) identification of the copyrighted work, (2) identification of the
+  // infringing material with its exact URL, (3) contact information for the
+  // person submitting the notice, (4) a good-faith-belief statement, (5) an
+  // accuracy/authority statement made under penalty of perjury, and (6) a
+  // signature. The notice is filed by SentryVo as the rights holder's
+  // authorized agent — see DMCA_AGENT_* in .env for the filer's real name,
+  // address, and email used below, which the agent (not each individual
+  // creator) is legally responsible for keeping accurate.
+  const agentName = process.env.DMCA_AGENT_NAME || '[DMCA_AGENT_NAME not set]';
+  const agentAddress = process.env.DMCA_AGENT_ADDRESS || '[DMCA_AGENT_ADDRESS not set]';
+  const agentEmail = process.env.DMCA_AGENT_EMAIL || process.env.REPORT_FROM_EMAIL;
+
+  const originalWorkLine = originalLinks?.length
+    ? `The copyrighted work at issue is original content created by ${user.name}. Representative example(s) of the original, authorized work can be found at:\n${originalLinks.join('\n')}`
+    : `The copyrighted work at issue is original content created by ${user.name}.`;
+
+  const subject = `DMCA Takedown Notice — ${leak.url}`;
+  const body = [
+    `This is a formal DMCA takedown notice under 17 U.S.C. §512.`,
+    ``,
+    `I am ${agentName}, submitting this notice as the authorized agent acting on behalf of the copyright owner, ${user.name}, regarding copyrighted content published without authorization at the following URL:`,
+    leak.url,
+    ``,
+    originalWorkLine,
+    ``,
+    `I have a good faith belief that use of this material in the manner complained of is not authorized by the copyright owner, its agent, or the law.`,
+    `I swear, under penalty of perjury, that the information in this notice is accurate and that I am authorized to act on behalf of the owner of the copyright that is allegedly infringed.`,
+    ``,
+    `Please remove or disable access to this content as soon as possible.`,
+    ``,
+    `Contact information for the person submitting this notice:`,
+    `Name: ${agentName}`,
+    `Address: ${agentAddress}`,
+    `Email: ${agentEmail}`,
+    ``,
+    `Electronically Signed: ${agentName}`,
+    ``,
+    `Reference: SentryVo case for ${user.email}`,
+  ].join('\n');
+
+  try {
+    await mailer.sendMail({
+      from: process.env.REPORT_FROM_EMAIL,
+      to: targetEmails.join(', '),
+      subject,
+      text: body,
+    });
+    return { sent: true };
+  } catch (err) {
+    console.warn(`Takedown notice failed for ${leak.url}:`, err.message);
+    return { sent: false, reason: 'send_failed' };
+  }
+}
+
+/**
+ * For a domain that's already in the manually-verified site_contact_emails
+ * list: expands each leak found on that domain by checking its page for
+ * OTHER image/video links sitting on the same page (see
+ * extractMediaLinksFromPage in hostLookup.js — and its documented
+ * JavaScript-rendering limitation), inserts any newly found ones as their
+ * own leak records, then sends ONE consolidated notice covering every URL
+ * found on this domain instead of a separate email per individual link.
+ *
+ * Returns the list of leak ids that were included, so the caller can mark
+ * them all 'reported' together after a successful send.
+ */
+async function attemptConsolidatedTakedownNotice(domain, knownEmail, initialLeaks, user, originalLinks) {
+  const mailer = getMailer();
+  if (!mailer) return { sent: false, leakIds: [] };
+
+  const allUrls = new Map(); // url -> leak id
+  for (const leak of initialLeaks) {
+    allUrls.set(leak.url, leak.id);
+  }
+
+  // Expand: check each already-found page for other media on the same page.
+  for (const leak of initialLeaks) {
+    try {
+      const extraUrls = await extractMediaLinksFromPage(leak.url);
+      for (const extraUrl of extraUrls) {
+        if (allUrls.has(extraUrl)) continue; // already queued this run
+        if (isOwnContent(extraUrl, originalLinks)) continue;
+        const inserted = await db.insertLeak({
+          userId: user.id,
+          url: extraUrl,
+          title: null,
+          source: 'page_crawl',
+          matchedAlias: leak.matched_alias,
+        });
+        // Skip anything already handled in a previous scan (reported,
+        // removed, or flagged for manual review) — only include leaks
+        // that are freshly found or still awaiting action, so this notice
+        // never re-reports something already dealt with.
+        if (inserted.status !== 'found') continue;
+        allUrls.set(extraUrl, inserted.id);
+      }
+    } catch (err) {
+      console.warn(`Page crawl failed for ${leak.url}:`, err.message);
+    }
+  }
+
+  const agentName = process.env.DMCA_AGENT_NAME || '[DMCA_AGENT_NAME not set]';
+  const agentAddress = process.env.DMCA_AGENT_ADDRESS || '[DMCA_AGENT_ADDRESS not set]';
+  const agentEmail = process.env.DMCA_AGENT_EMAIL || process.env.REPORT_FROM_EMAIL;
+  const urlList = Array.from(allUrls.keys());
+
+  const originalWorkLine = originalLinks?.length
+    ? `The copyrighted work at issue is original content created by ${user.name}. Representative example(s) of the original, authorized work can be found at:\n${originalLinks.join('\n')}`
+    : `The copyrighted work at issue is original content created by ${user.name}.`;
+
+  const subject = `DMCA Takedown Notice — ${urlList.length} item(s) on ${domain}`;
+  const body = [
+    `This is a formal DMCA takedown notice under 17 U.S.C. §512.`,
+    ``,
+    `I am ${agentName}, submitting this notice as the authorized agent acting on behalf of the copyright owner, ${user.name}, regarding copyrighted content published without authorization at the following URL(s) on ${domain}:`,
+    ``,
+    ...urlList.map((u) => `- ${u}`),
+    ``,
+    originalWorkLine,
+    ``,
+    `I have a good faith belief that use of this material in the manner complained of is not authorized by the copyright owner, its agent, or the law.`,
+    `I swear, under penalty of perjury, that the information in this notice is accurate and that I am authorized to act on behalf of the owner of the copyright that is allegedly infringed.`,
+    ``,
+    `Please remove or disable access to this content as soon as possible.`,
+    ``,
+    `Contact information for the person submitting this notice:`,
+    `Name: ${agentName}`,
+    `Address: ${agentAddress}`,
+    `Email: ${agentEmail}`,
+    ``,
+    `Electronically Signed: ${agentName}`,
+    ``,
+    `Reference: SentryVo case for ${user.email}`,
+  ].join('\n');
+
+  try {
+    await mailer.sendMail({
+      from: process.env.REPORT_FROM_EMAIL,
+      to: knownEmail,
+      subject,
+      text: body,
+    });
+    return { sent: true, leakIds: Array.from(allUrls.values()) };
+  } catch (err) {
+    console.warn(`Consolidated takedown notice failed for ${domain}:`, err.message);
+    return { sent: false, leakIds: [] };
+  }
+}
+
+async function recheckLeak(leak) {
+  try {
+    const res = await fetch(leak.url, { method: 'GET', redirect: 'follow', timeout: 10000 });
+    // Very rough heuristic: 404/410/403 or a redirect to a different host
+    // suggests the content is no longer there. Confirm manually for
+    // anything that matters — this is a signal, not proof.
+    const finalHost = new URL(res.url).hostname;
+    const originalHost = new URL(leak.url).hostname;
+    if ([404, 410, 403].includes(res.status) || finalHost !== originalHost) {
+      return true;
+    }
+    return false;
+  } catch {
+    // Unreachable often means taken down (DNS gone, connection refused, etc.)
+    return true;
+  }
+}
+
+async function runDailyScanForUser(user) {
+  const scanStart = new Date().toISOString();
+  const aliases = await db.getAliasesForUser(user.id);
+  const platforms = (user.platforms || '').split(',').map((p) => p.trim()).filter(Boolean);
+  // The creator's own official links — never flag these as leaks, see isOwnContent().
+  const originalLinks = await db.getOriginalLinksForUser(user.id);
+
+  for (const alias of aliases) {
+    // Text search: leak-site mentions, forum posts, social platform posts
+    for (const query of buildTextQueries(alias, platforms)) {
+      try {
+        const results = await searchGoogle(query);
+        for (const result of results) {
+          if (isOwnContent(result.url, originalLinks)) continue;
+          if (!(await db.leakExists(user.id, result.url))) {
+            await db.insertLeak({
+              userId: user.id,
+              url: result.url,
+              title: result.title,
+              source: 'serper_web',
+              matchedAlias: alias,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`Text scan failed for alias "${alias}" (user ${user.email}):`, err.message);
+      }
+    }
+
+    // Image search: reposted photos on Google Images
+    for (const query of buildImageQueries(alias)) {
+      try {
+        const results = await searchGoogleImages(query);
+        for (const result of results) {
+          if (isOwnContent(result.url, originalLinks)) continue;
+          if (!(await db.leakExists(user.id, result.url))) {
+            await db.insertLeak({
+              userId: user.id,
+              url: result.url,
+              title: result.title,
+              source: 'serper_image',
+              matchedAlias: alias,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`Image scan failed for alias "${alias}" (user ${user.email}):`, err.message);
+      }
+    }
+  }
+
+  // Attempt takedown notices for anything newly found — grouped by domain
+  // first, since a known site gets ONE consolidated notice covering
+  // everything found there (see attemptConsolidatedTakedownNotice), rather
+  // than one email per individual link. Major platforms are flagged for
+  // manual review instead of any automated attempt (see the comment on
+  // attemptTakedownNotice for why); unknown generic sites still go through
+  // the original per-leak flow.
+  const newlyFound = await db.getLeaksByStatus(user.id, 'found');
+  const byDomain = new Map();
+  for (const leak of newlyFound) {
+    let domain;
+    try {
+      domain = new URL(leak.url).hostname.replace(/^www\./, '').toLowerCase();
+    } catch {
+      continue; // unparseable URL — nothing to group it under, skip
+    }
+    if (!byDomain.has(domain)) byDomain.set(domain, []);
+    byDomain.get(domain).push(leak);
+  }
+
+  for (const [domain, leaksOnDomain] of byDomain) {
+    if (isMajorPlatform(leaksOnDomain[0].url)) {
+      for (const leak of leaksOnDomain) {
+        await db.markLeakStatus(leak.id, 'manual_review');
+      }
+      continue;
+    }
+
+    const knownEntry = await db.getSiteContactEmail(domain);
+    if (knownEntry) {
+      const result = await attemptConsolidatedTakedownNotice(domain, knownEntry.email, leaksOnDomain, user, originalLinks);
+      if (result.sent) {
+        for (const leakId of result.leakIds) {
+          await db.markLeakStatus(leakId, 'reported');
+        }
+      }
+      // If it failed to send, everything on this domain (including any
+      // newly-crawled leaks already inserted) simply stays 'found' and
+      // gets retried on the next scan.
+      continue;
+    }
+
+    // Not a known site — fall back to the original per-leak flow (page
+    // scrape / RDAP / guessed abuse address, one notice per URL).
+    for (const leak of leaksOnDomain) {
+      const result = await attemptTakedownNotice(leak, user, originalLinks);
+      if (result.sent) {
+        await db.markLeakStatus(leak.id, 'reported');
+      } else if (result.reason === 'major_platform') {
+        await db.markLeakStatus(leak.id, 'manual_review');
+      }
+      // Any other reason leaves the leak as 'found' for retry next scan.
+    }
+  }
+
+  // Recheck previously-reported leaks for removal
+  const reported = await db.getLeaksByStatus(user.id, 'reported');
+  for (const leak of reported) {
+    const removed = await recheckLeak(leak);
+    if (removed) await db.markLeakStatus(leak.id, 'removed');
+  }
+
+  // Scanning runs every day regardless of plan (catch things fast), but the
+  // EMAIL only goes out on the subscriber's plan cadence — daily for the
+  // multi-platform ($100) plan, every 3 days for the single-platform ($50)
+  // plan (see report_frequency_days in db.js).
+  if (db.isReportDue(user)) {
+    const sinceTimestamp = user.last_report_at || scanStart;
+    const leaksSinceLastReport = await db.getLeaksFoundSince(user.id, sinceTimestamp);
+    const summary = await db.getLeakSummary(user.id);
+
+    await sendDailyReportEmail(user, leaksSinceLastReport, summary);
+    await db.logReportSent(user.id, leaksSinceLastReport.length);
+    await db.markReportSentNow(user.id);
+
+    return { user: user.email, reportSent: true, newLeaks: leaksSinceLastReport.length, summary };
+  }
+
+  return { user: user.email, reportSent: false };
+}
+
+async function runDailyScanForAllUsers() {
+  const users = await db.getActiveUsers();
+  const results = [];
+  for (const user of users) {
+    try {
+      results.push(await runDailyScanForUser(user));
+    } catch (err) {
+      console.error(`Daily scan failed for ${user.email}:`, err.message);
+    }
+  }
+  return results;
+}
+
+// Allow running manually: `npm run scan-now`
+if (require.main === module && process.argv.includes('--run-once')) {
+  db.ready
+    .then(() => runDailyScanForAllUsers())
+    .then((r) => {
+      console.log('Scan complete:', r);
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
+
+module.exports = { runDailyScanForUser, runDailyScanForAllUsers, GOOGLE_REMOVAL_TOOL_URL };

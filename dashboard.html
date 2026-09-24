@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Preview — SentryVo</title>
-<meta name="description" content="Preview of the SentryVo case dashboard — scans, takedowns and recovered revenue at a glance.">
+<title>Dashboard — SentryVo</title>
+<meta name="description" content="Your SentryVo case dashboard — scans, takedowns, brand profile, billing and account settings.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="assets/logo-icon.png">
 <meta name="robots" content="noindex, nofollow">
+<link rel="canonical" href="https://www.sentryvo.com/dashboard.html">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,27 +20,27 @@
     <a href="index.html" class="logo">
       <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
     </a>
-    <a href="#" class="dash-link active">
+    <a href="#" class="dash-link active" data-tab="overview">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9 H21" stroke="currentColor" stroke-width="2"/></svg>
       Overview
     </a>
-    <a href="#" class="dash-link">
+    <a href="#" class="dash-link" data-tab="scans">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21 L16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       Scans
     </a>
-    <a href="#" class="dash-link">
+    <a href="#" class="dash-link" data-tab="takedowns">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="currentColor" stroke-width="2"/></svg>
       Takedowns
     </a>
-    <a href="#" class="dash-link">
+    <a href="#" class="dash-link" data-tab="profile">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21 C4 16 8 14 12 14 C16 14 20 16 20 21" stroke="currentColor" stroke-width="2"/></svg>
       Brand Profile
     </a>
-    <a href="#" class="dash-link">
+    <a href="#" class="dash-link" data-tab="billing">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 21 C4 16 8 14 12 14 C16 14 20 16 20 21" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg>
       Billing
     </a>
-    <a href="#" class="dash-link">
+    <a href="#" class="dash-link" data-tab="settings">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19 12 a7 7 0 0 0-.1-1.2 l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12" stroke="currentColor" stroke-width="1.5"/></svg>
       Settings
     </a>
@@ -56,7 +57,7 @@
     <div class="dash-topbar">
       <div>
         <span class="eyebrow" id="dash-case-label">Loading case…</span>
-        <h2 style="margin:6px 0 0;">Overview</h2>
+        <h2 style="margin:6px 0 0;" id="dash-panel-title">Overview</h2>
       </div>
       <a href="index.html" class="btn">Back to Site</a>
     </div>
@@ -65,95 +66,185 @@
       <p style="margin:0;">Could not load your dashboard. <a href="login.html" style="color:var(--rust);">Log in again</a>.</p>
     </div>
 
-    <div class="dash-stats">
-      <div class="dash-stat">
-        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Leaks Found</span></div>
-        <b id="stat-found">—</b>
-        <span class="delta">Total tracked</span>
+    <!-- ===================== OVERVIEW ===================== -->
+    <div class="tab-panel" data-panel="overview">
+      <div class="dash-stats">
+        <div class="dash-stat">
+          <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Leaks Found</span></div>
+          <b id="stat-found">—</b>
+          <span class="delta">Total tracked</span>
+        </div>
+        <div class="dash-stat">
+          <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Takedowns Sent</span></div>
+          <b id="stat-reported">—</b>
+          <span class="delta">Notices attempted</span>
+        </div>
+        <div class="dash-stat">
+          <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Confirmed Removed</span></div>
+          <b id="stat-removed">—</b>
+          <span class="delta" id="stat-removal-rate">—</span>
+        </div>
+        <div class="dash-stat">
+          <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Report Schedule</span></div>
+          <b id="stat-cadence" style="font-size:1.3rem;">—</b>
+          <span class="delta" id="stat-last-report">—</span>
+        </div>
       </div>
-      <div class="dash-stat">
-        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Takedowns Sent</span></div>
-        <b id="stat-reported">—</b>
-        <span class="delta">Notices attempted</span>
+
+      <div class="dash-panel">
+        <div class="dash-panel-head">
+          <h3 style="margin:0;">Leaks Found — Last 7 Days</h3>
+          <span style="font-size:.8rem; color:var(--text-low);">From your real case history</span>
+        </div>
+        <div class="bar-chart" id="bar-chart">
+          <div class="bar" style="height:2%;"><span>Mon</span></div>
+          <div class="bar" style="height:2%;"><span>Tue</span></div>
+          <div class="bar" style="height:2%;"><span>Wed</span></div>
+          <div class="bar" style="height:2%;"><span>Thu</span></div>
+          <div class="bar" style="height:2%;"><span>Fri</span></div>
+          <div class="bar" style="height:2%;"><span>Sat</span></div>
+          <div class="bar" style="height:2%;"><span>Sun</span></div>
+        </div>
       </div>
-      <div class="dash-stat">
-        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Confirmed Removed</span></div>
-        <b id="stat-removed">—</b>
-        <span class="delta" id="stat-removal-rate">—</span>
-      </div>
-      <div class="dash-stat">
-        <div class="stat-top"><span style="color:var(--text-low); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em;">Report Schedule</span></div>
-        <b id="stat-cadence" style="font-size:1.3rem;">—</b>
-        <span class="delta" id="stat-last-report">—</span>
+
+      <div class="dash-panel">
+        <div class="dash-panel-head">
+          <h3 style="margin:0;">Recent Activity</h3>
+          <span style="font-size:.8rem; color:var(--text-low);" id="activity-count">—</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="dash-table">
+            <thead><tr><th>Source</th><th>URL</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody id="activity-rows"><tr><td colspan="4" style="color:var(--text-low);">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <h3 style="margin:0;">Leaks Found — Last 7 Days</h3>
-        <span style="font-size:.8rem; color:var(--text-low);">From your real case history</span>
-      </div>
-      <div class="bar-chart" id="bar-chart">
-        <div class="bar" style="height:2%;"><span>Mon</span></div>
-        <div class="bar" style="height:2%;"><span>Tue</span></div>
-        <div class="bar" style="height:2%;"><span>Wed</span></div>
-        <div class="bar" style="height:2%;"><span>Thu</span></div>
-        <div class="bar" style="height:2%;"><span>Fri</span></div>
-        <div class="bar" style="height:2%;"><span>Sat</span></div>
-        <div class="bar" style="height:2%;"><span>Sun</span></div>
-      </div>
-    </div>
-
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <h3 style="margin:0;">Recent Activity</h3>
-        <span style="font-size:.8rem; color:var(--text-low);" id="activity-count">—</span>
-      </div>
-      <div style="overflow-x:auto;">
-        <table class="dash-table">
-          <thead>
-            <tr><th>Source</th><th>URL</th><th>Status</th><th>Date</th></tr>
-          </thead>
-          <tbody id="activity-rows">
-            <tr><td colspan="4" style="color:var(--text-low);">Loading…</td></tr>
-          </tbody>
-        </table>
+    <!-- ===================== SCANS (full leak history) ===================== -->
+    <div class="tab-panel hidden" data-panel="scans">
+      <div class="dash-panel">
+        <div class="dash-panel-head">
+          <h3 style="margin:0;">All Leaks Found</h3>
+          <span style="font-size:.8rem; color:var(--text-low);" id="scans-count">—</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="dash-table">
+            <thead><tr><th>Source</th><th>URL</th><th>Status</th><th>Found</th></tr></thead>
+            <tbody id="scans-rows"><tr><td colspan="4" style="color:var(--text-low);">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <h3 style="margin:0;">Brand Profile</h3>
+    <!-- ===================== TAKEDOWNS (reported/removed/manual review only) ===================== -->
+    <div class="tab-panel hidden" data-panel="takedowns">
+      <div class="dash-panel">
+        <div class="dash-panel-head">
+          <h3 style="margin:0;">Takedown Activity</h3>
+          <span style="font-size:.8rem; color:var(--text-low);" id="takedowns-count">—</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="dash-table">
+            <thead><tr><th>URL</th><th>Status</th><th>Found</th></tr></thead>
+            <tbody id="takedowns-rows"><tr><td colspan="3" style="color:var(--text-low);">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
-      <p style="margin:0; font-size:.9rem;" id="brand-profile-text">Loading…</p>
+    </div>
+
+    <!-- ===================== BRAND PROFILE ===================== -->
+    <div class="tab-panel hidden" data-panel="profile">
+      <div class="dash-panel">
+        <div class="dash-panel-head"><h3 style="margin:0;">Platforms</h3></div>
+        <p style="margin:0; font-size:.9rem;" id="profile-platforms-text">Loading…</p>
+      </div>
+
+      <div class="dash-panel">
+        <div class="dash-panel-head"><h3 style="margin:0;">Stage Names / Aliases Monitored</h3></div>
+        <ul id="profile-aliases-list" style="margin:0 0 16px; padding-left:20px; font-size:.9rem;"><li style="color:var(--text-low); list-style:none; padding-left:-20px;">Loading…</li></ul>
+        <form id="add-alias-form" style="display:flex; gap:10px;">
+          <input type="text" id="new-alias" placeholder="Add another stage name/alias" style="flex:1;" required>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+        <p class="confirm-note" id="add-alias-status" style="min-height:1.2em; font-size:.82rem; margin-top:8px;"></p>
+      </div>
+
+      <div class="dash-panel">
+        <div class="dash-panel-head"><h3 style="margin:0;">Your Own Original Content Links</h3></div>
+        <p style="font-size:.85rem; color:var(--text-low); margin-top:0;">These are excluded from ever being flagged as a leak. If you post on more than one official platform, add all of them here.</p>
+        <ul id="profile-links-list" style="margin:0 0 16px; padding-left:20px; font-size:.9rem; word-break:break-all;"><li style="color:var(--text-low); list-style:none; padding-left:-20px;">Loading…</li></ul>
+        <form id="add-link-form" style="display:flex; gap:10px;">
+          <input type="url" id="new-link" placeholder="https://your-official-page.com" style="flex:1;" required>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+        <p class="confirm-note" id="add-link-status" style="min-height:1.2em; font-size:.82rem; margin-top:8px;"></p>
+      </div>
+    </div>
+
+    <!-- ===================== BILLING ===================== -->
+    <div class="tab-panel hidden" data-panel="billing">
+      <div class="dash-panel">
+        <div class="dash-panel-head"><h3 style="margin:0;">Your Plan</h3></div>
+        <p style="margin:0 0 16px; font-size:.95rem;" id="billing-plan-text">Loading…</p>
+        <div id="billing-portal-wrap"></div>
+      </div>
+    </div>
+
+    <!-- ===================== SETTINGS ===================== -->
+    <div class="tab-panel hidden" data-panel="settings">
+      <div class="dash-panel">
+        <div class="dash-panel-head"><h3 style="margin:0;">Change Password</h3></div>
+        <form id="change-password-form">
+          <div class="field">
+            <label for="current-password">Current password</label>
+            <input type="password" id="current-password" required autocomplete="current-password">
+          </div>
+          <div class="field">
+            <label for="new-password-settings">New password</label>
+            <input type="password" id="new-password-settings" required autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-primary" id="change-password-submit">Update Password</button>
+          <p class="confirm-note" id="change-password-status" style="min-height:1.2em; font-size:.82rem; margin-top:10px;"></p>
+        </form>
+      </div>
     </div>
   </main>
 </div>
 
 <script src="script.js"></script>
 <script>
-  (async function loadDashboard() {
+  let cachedSummary = null;
+  let cachedLeaks = [];
+
+  function statusBadgeHtml(status) {
+    const labels = { found: 'Leak Found', reported: 'DMCA Sent', removed: 'Removed', manual_review: 'Manual Review' };
+    return `<span class="badge ${status}">${labels[status] || status}</span>`;
+  }
+
+  // ---------------- Tab switching ----------------
+  document.querySelectorAll('.dash-link[data-tab]').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const tab = link.dataset.tab;
+      document.querySelectorAll('.dash-link[data-tab]').forEach((l) => l.classList.remove('active'));
+      link.classList.add('active');
+      document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
+      document.querySelector(`.tab-panel[data-panel="${tab}"]`).classList.remove('hidden');
+      const titles = { overview: 'Overview', scans: 'Scans', takedowns: 'Takedowns', profile: 'Brand Profile', billing: 'Billing', settings: 'Settings' };
+      document.getElementById('dash-panel-title').textContent = titles[tab] || tab;
+    });
+  });
+
+  // ---------------- Load everything once, populate all tabs ----------------
+  async function loadDashboard() {
     const errorPanel = document.getElementById('dash-error');
-
-    function showError() {
-      errorPanel.classList.remove('hidden');
-    }
-
-    function statusBadgeHtml(status) {
-      const labels = { found: 'Leak Found', reported: 'DMCA Sent', removed: 'Removed' };
-      return `<span class="badge ${status}">${labels[status] || status}</span>`;
-    }
-
     try {
-      const summaryRes = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/summary`, {
-        credentials: 'include',
-      });
-      if (summaryRes.status === 401) {
-        window.location.href = 'login.html';
-        return;
-      }
+      const summaryRes = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/summary`, { credentials: 'include' });
+      if (summaryRes.status === 401) { window.location.href = 'login.html'; return; }
       if (!summaryRes.ok) throw new Error('Failed to load summary');
       const data = await summaryRes.json();
+      cachedSummary = data;
 
       document.getElementById('dash-case-label').textContent = `Case: ${data.name}`;
       document.getElementById('sidebar-user').innerHTML =
@@ -166,61 +257,183 @@
       document.getElementById('stat-removed').textContent = s.removed ?? 0;
       const removalRate = s.total ? Math.round((s.removed / s.total) * 100) : 0;
       document.getElementById('stat-removal-rate').textContent = s.total ? `${removalRate}% removal rate` : 'No leaks yet';
-
       document.getElementById('stat-cadence').textContent = data.reportFrequencyDays === 1 ? 'Daily' : `Every ${data.reportFrequencyDays}d`;
       document.getElementById('stat-last-report').textContent = data.lastReportAt
         ? `Last: ${new Date(data.lastReportAt).toLocaleDateString()}`
         : 'No report sent yet';
 
-      document.getElementById('brand-profile-text').textContent =
-        `Platforms: ${data.platforms.join(', ') || 'None set'}`;
-
-      const leaksRes = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/leaks?limit=10`, {
-        credentials: 'include',
-      });
+      const leaksRes = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/leaks?limit=100`, { credentials: 'include' });
       if (!leaksRes.ok) throw new Error('Failed to load leaks');
       const { leaks } = await leaksRes.json();
+      cachedLeaks = leaks;
 
-      document.getElementById('activity-count').textContent = `${leaks.length} most recent`;
-
-      const rowsEl = document.getElementById('activity-rows');
-      if (!leaks.length) {
-        rowsEl.innerHTML = `<tr><td colspan="4" style="color:var(--text-low);">No leaks found yet — your first scan will populate this.</td></tr>`;
-      } else {
-        rowsEl.innerHTML = leaks.map((leak) => `
-          <tr>
-            <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
-            <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
-            <td>${statusBadgeHtml(leak.status)}</td>
-            <td>${new Date(leak.found_at).toLocaleDateString()}</td>
-          </tr>
-        `).join('');
-      }
-
-      // Bar chart: bucket leaks found in the last 7 days by day
-      const days = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        days.push({ label: d.toLocaleDateString(undefined, { weekday: 'short' }), date: d.toDateString(), count: 0 });
-      }
-      leaks.forEach((leak) => {
-        const foundDate = new Date(leak.found_at).toDateString();
-        const bucket = days.find((d) => d.date === foundDate);
-        if (bucket) bucket.count++;
-      });
-      const maxCount = Math.max(...days.map((d) => d.count), 1);
-      const barEls = document.querySelectorAll('#bar-chart .bar');
-      days.forEach((d, i) => {
-        const heightPct = Math.max((d.count / maxCount) * 100, 2);
-        barEls[i].style.height = `${heightPct}%`;
-        barEls[i].querySelector('span').textContent = d.label;
-      });
+      renderOverview(leaks);
+      renderScans(leaks);
+      renderTakedowns(leaks);
+      renderProfile(data);
+      renderBilling(data);
     } catch (err) {
       console.error('Dashboard load error:', err);
-      showError();
+      errorPanel.classList.remove('hidden');
     }
-  })();
+  }
+
+  function renderOverview(leaks) {
+    const recent = leaks.slice(0, 10);
+    document.getElementById('activity-count').textContent = `${recent.length} most recent`;
+    const rowsEl = document.getElementById('activity-rows');
+    rowsEl.innerHTML = recent.length ? recent.map((leak) => `
+      <tr>
+        <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
+        <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
+        <td>${statusBadgeHtml(leak.status)}</td>
+        <td>${new Date(leak.found_at).toLocaleDateString()}</td>
+      </tr>
+    `).join('') : `<tr><td colspan="4" style="color:var(--text-low);">No leaks found yet — your first scan will populate this.</td></tr>`;
+
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push({ label: d.toLocaleDateString(undefined, { weekday: 'short' }), date: d.toDateString(), count: 0 });
+    }
+    leaks.forEach((leak) => {
+      const bucket = days.find((d) => d.date === new Date(leak.found_at).toDateString());
+      if (bucket) bucket.count++;
+    });
+    const maxCount = Math.max(...days.map((d) => d.count), 1);
+    const barEls = document.querySelectorAll('#bar-chart .bar');
+    days.forEach((d, i) => {
+      barEls[i].style.height = `${Math.max((d.count / maxCount) * 100, 2)}%`;
+      barEls[i].querySelector('span').textContent = d.label;
+    });
+  }
+
+  function renderScans(leaks) {
+    document.getElementById('scans-count').textContent = `${leaks.length} total`;
+    const rowsEl = document.getElementById('scans-rows');
+    rowsEl.innerHTML = leaks.length ? leaks.map((leak) => `
+      <tr>
+        <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
+        <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
+        <td>${statusBadgeHtml(leak.status)}</td>
+        <td>${new Date(leak.found_at).toLocaleDateString()}</td>
+      </tr>
+    `).join('') : `<tr><td colspan="4" style="color:var(--text-low);">No scans recorded yet.</td></tr>`;
+  }
+
+  function renderTakedowns(leaks) {
+    const actioned = leaks.filter((l) => ['reported', 'removed', 'manual_review'].includes(l.status));
+    document.getElementById('takedowns-count').textContent = `${actioned.length} item(s)`;
+    const rowsEl = document.getElementById('takedowns-rows');
+    rowsEl.innerHTML = actioned.length ? actioned.map((leak) => `
+      <tr>
+        <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
+        <td>${statusBadgeHtml(leak.status)}</td>
+        <td>${new Date(leak.found_at).toLocaleDateString()}</td>
+      </tr>
+    `).join('') : `<tr><td colspan="3" style="color:var(--text-low);">No takedown activity yet.</td></tr>`;
+  }
+
+  function renderProfile(data) {
+    document.getElementById('profile-platforms-text').textContent = data.platforms.join(', ') || 'None set';
+
+    const aliasesList = document.getElementById('profile-aliases-list');
+    aliasesList.innerHTML = data.aliases?.length
+      ? data.aliases.map((a) => `<li>${a}</li>`).join('')
+      : '<li style="color:var(--text-low); list-style:none; margin-left:-20px;">None yet</li>';
+
+    const linksList = document.getElementById('profile-links-list');
+    linksList.innerHTML = data.originalLinks?.length
+      ? data.originalLinks.map((u) => `<li><a href="${u}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid);">${u}</a></li>`).join('')
+      : '<li style="color:var(--text-low); list-style:none; margin-left:-20px;">None yet</li>';
+  }
+
+  function renderBilling(data) {
+    const planLabel = data.plan === 'multi' ? 'Multiple Keywords/Accounts' : data.plan === 'single' ? 'Single Keyword/Account' : data.plan.replace('agency_', 'Agency ').replace(/^\w/, (c) => c.toUpperCase());
+    document.getElementById('billing-plan-text').innerHTML =
+      `<strong>${planLabel}</strong><br>Status: ${data.status}<br>Report schedule: ${data.reportFrequencyDays === 1 ? 'Daily' : `Every ${data.reportFrequencyDays} days`}`;
+
+    const portalWrap = document.getElementById('billing-portal-wrap');
+    if (data.customerPortalUrl) {
+      portalWrap.innerHTML = `<a href="${data.customerPortalUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Manage Subscription</a>`;
+    } else {
+      portalWrap.innerHTML = `<p style="font-size:.85rem; color:var(--text-low);">To manage or cancel your subscription, use the link in the receipt email Lemon Squeezy sent when you subscribed, or <a href="contact.html" style="color:var(--rust);">contact us</a> for help.</p>`;
+    }
+  }
+
+  // ---------------- Brand Profile: add alias / add link ----------------
+  document.getElementById('add-alias-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('add-alias-status');
+    const alias = document.getElementById('new-alias').value.trim();
+    if (!alias) return;
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/add-alias`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ alias }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not add alias');
+      statusEl.textContent = data.message;
+      statusEl.style.color = 'var(--sage)';
+      document.getElementById('new-alias').value = '';
+      loadDashboard();
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    }
+  });
+
+  document.getElementById('add-link-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('add-link-status');
+    const url = document.getElementById('new-link').value.trim();
+    if (!url) return;
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/add-original-link`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not add link');
+      statusEl.textContent = data.message;
+      statusEl.style.color = 'var(--sage)';
+      document.getElementById('new-link').value = '';
+      loadDashboard();
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    }
+  });
+
+  // ---------------- Settings: change password ----------------
+  document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById('change-password-submit');
+    const statusEl = document.getElementById('change-password-status');
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password-settings').value;
+
+    submitBtn.disabled = true;
+    statusEl.textContent = '';
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/change-password`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not update password');
+      statusEl.textContent = data.message;
+      statusEl.style.color = 'var(--sage)';
+      document.getElementById('change-password-form').reset();
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
 
   document.getElementById('logout-btn').addEventListener('click', async () => {
     try {
@@ -230,6 +443,8 @@
     }
     window.location.href = 'login.html';
   });
+
+  loadDashboard();
 </script>
 </body>
 </html>

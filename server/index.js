@@ -75,6 +75,16 @@ app.post(
       if (eventName === 'order_created' || eventName === 'subscription_created') {
         await db.setUserActiveByCheckoutRef(String(checkoutRef), subscriptionId);
         console.log(`Activated user (checkout_ref ${checkoutRef}) via ${eventName}`);
+
+        // Subscription events include a "manage your subscription" portal
+        // link — capture it if present so the dashboard's Billing tab can
+        // link straight there. Not present on order_created for one-time
+        // orders, so this is best-effort and gracefully absent otherwise.
+        const portalUrl = event?.data?.attributes?.urls?.customer_portal;
+        if (portalUrl) {
+          const user = await db.getUserByEmail(event?.data?.attributes?.user_email || '');
+          if (user) await db.setCustomerPortalUrl(user.id, portalUrl);
+        }
       } else {
         console.log(`Lemon Squeezy webhook received: ${eventName} (no action taken)`);
       }
@@ -406,6 +416,8 @@ app.get('/api/dashboard/summary', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to view this account' });
     }
     const summary = await db.getLeakSummary(target.id);
+    const aliases = await db.getAliasesForUser(target.id);
+    const originalLinks = await db.getOriginalLinksForUser(target.id);
     res.json({
       name: target.name,
       email: target.email,
@@ -415,6 +427,9 @@ app.get('/api/dashboard/summary', requireAuth, async (req, res) => {
       platforms: (target.platforms || '').split(',').filter(Boolean),
       reportFrequencyDays: target.report_frequency_days,
       lastReportAt: target.last_report_at,
+      aliases,
+      originalLinks,
+      customerPortalUrl: target.ls_customer_portal_url || null,
       summary,
     });
   } catch (err) {
@@ -436,6 +451,60 @@ app.get('/api/dashboard/leaks', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Dashboard leaks error:', err.message);
     res.status(500).json({ error: 'Could not load leak data' });
+  }
+});
+
+// ---------------- Dashboard: Brand Profile & account management ----------------
+// Adds one alias to the logged-in user's own account — powers the Brand
+// Profile tab's "add a stage name" form.
+app.post('/api/dashboard/add-alias', requireAuth, async (req, res) => {
+  try {
+    const alias = req.body?.alias?.trim();
+    if (!alias) return res.status(400).json({ error: 'alias is required' });
+    await db.addAliases(req.user.id, [alias]);
+    res.json({ ok: true, message: `Added "${alias}" to your monitored aliases` });
+  } catch (err) {
+    console.error('Add alias error:', err.message);
+    res.status(500).json({ error: 'Could not add alias' });
+  }
+});
+
+// Adds one original-content link (proof of ownership) — same isOwnContent
+// exclusion in scanner.js reads from this same table, so adding a link
+// here immediately protects that platform from ever being flagged as a leak.
+app.post('/api/dashboard/add-original-link', requireAuth, async (req, res) => {
+  try {
+    const url = req.body?.url?.trim();
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    await db.addOriginalLinks(req.user.id, [url]);
+    res.json({ ok: true, message: 'Added — this link will never be flagged as a leak going forward' });
+  } catch (err) {
+    console.error('Add original link error:', err.message);
+    res.status(500).json({ error: 'Could not add link' });
+  }
+});
+
+// Change password while logged in — different from the forgot-password
+// flow, which is for when you DON'T have access to your account. This
+// requires knowing your current password first.
+app.post('/api/dashboard/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Choose a new password at least 6 characters long' });
+    }
+    if (!bcrypt.compareSync(currentPassword, req.user.password_hash || '')) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    const newHash = bcrypt.hashSync(newPassword, 10);
+    await db.setUserPasswordHash(req.user.id, newHash);
+    res.json({ ok: true, message: 'Password updated' });
+  } catch (err) {
+    console.error('Change password error:', err.message);
+    res.status(500).json({ error: 'Could not update password' });
   }
 });
 

@@ -61,6 +61,12 @@ async function initSchema() {
     -- Purely for the admin's own reference — doesn't change how the
     -- account behaves once active.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'direct';
+    -- Lemon Squeezy's own "manage your subscription" portal link — captured
+    -- from the webhook payload when present (subscription events include
+    -- data.attributes.urls.customer_portal). Powers the dashboard's Billing
+    -- tab; older accounts activated before this existed will just have NULL
+    -- here, handled gracefully on the frontend with a fallback message.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS ls_customer_portal_url TEXT;
     -- role is one of: 'individual' (existing single/multi subscribers, unaffected),
     -- 'agency_owner' (manages a roster, billed via Lemon Squeezy like before),
     -- 'agency_member' (a creator added by an agency owner, no separate billing)
@@ -482,6 +488,10 @@ async function setUserPasswordHash(userId, passwordHash) {
   return result.rows[0] || null;
 }
 
+async function setCustomerPortalUrl(userId, url) {
+  await pool.query(`UPDATE users SET ls_customer_portal_url = $1 WHERE id = $2`, [url, userId]);
+}
+
 module.exports = {
   pool,
   ready,
@@ -522,6 +532,7 @@ module.exports = {
   setUserStatus,
   deleteUser,
   setUserPasswordHash,
+  setCustomerPortalUrl,
   createAgency,
   getAgencyById,
   getAgencyOwner,

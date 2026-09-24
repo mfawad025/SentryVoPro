@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add Client — SentryVo Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section style="padding:60px 0;">
+  <div class="wrap" style="max-width:640px;">
+    <div style="background:var(--ink-2); border:1px solid var(--line); border-radius:16px; padding:40px;">
+      <span class="eyebrow">Admin Only — Not Linked From Site Navigation</span>
+      <h2 style="margin:8px 0 6px;">Add a client directly</h2>
+      <p style="font-size:.88rem; color:var(--text-low); margin-bottom:28px;">For clients who paid outside SentryVo (e.g. a Fiverr order) — this activates their protection immediately, no checkout involved. They'll get a welcome email to set their own password.</p>
+
+      <form id="add-client-form">
+        <div class="field">
+          <label for="admin-key">Admin key</label>
+          <input type="password" id="admin-key" required autocomplete="off">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="field">
+            <label for="client-name">Client name / stage name</label>
+            <input type="text" id="client-name" required>
+          </div>
+          <div class="field">
+            <label for="client-email">Client email</label>
+            <input type="email" id="client-email" required>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="field">
+            <label for="client-mobile">Mobile (optional)</label>
+            <input type="tel" id="client-mobile">
+          </div>
+          <div class="field">
+            <label for="client-plan">Plan</label>
+            <select id="client-plan" required>
+              <option value="single">Single Keyword/Account</option>
+              <option value="multi">Multiple Keywords/Accounts</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="client-platforms">Platform(s), comma separated</label>
+          <input type="text" id="client-platforms" placeholder="OnlyFans, Fansly" required>
+        </div>
+        <div class="field">
+          <label for="client-aliases">Stage names/aliases to monitor, comma separated</label>
+          <input type="text" id="client-aliases" placeholder="e.g. astro_domina">
+        </div>
+        <div class="field">
+          <label for="client-links">Link(s) to their own original content</label>
+          <textarea id="client-links" placeholder="One per line — proof of ownership, not infringing links" rows="3"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="add-client-submit">Add Client &amp; Activate</button>
+        <p class="confirm-note" id="add-client-status" style="min-height:1.2em; font-size:.82rem; margin-top:12px; text-align:center;"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script src="script.js"></script>
+<script>
+  document.getElementById('add-client-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('add-client-submit');
+    const statusEl = document.getElementById('add-client-status');
+
+    const adminKey = document.getElementById('admin-key').value.trim();
+    const name = document.getElementById('client-name').value.trim();
+    const email = document.getElementById('client-email').value.trim();
+    const mobile = document.getElementById('client-mobile').value.trim();
+    const plan = document.getElementById('client-plan').value;
+    const platforms = document.getElementById('client-platforms').value.trim();
+    const aliases = document.getElementById('client-aliases').value.trim();
+    const originalLinks = document.getElementById('client-links').value.trim();
+
+    if (!adminKey || !name || !email || !platforms) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding…';
+    statusEl.textContent = '';
+
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/admin/add-client?key=${encodeURIComponent(adminKey)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, email, mobile, plan, platforms, aliases, originalLinks }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not add client');
+
+      statusEl.textContent = data.message;
+      statusEl.style.color = 'var(--sage)';
+      document.getElementById('add-client-form').reset();
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Add Client & Activate';
+    }
+  });
+</script>
+</body>
+</html>

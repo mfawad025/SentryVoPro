@@ -150,6 +150,40 @@ async function sendPasswordResetEmail(toAddress, resetUrl) {
 }
 
 /**
+ * Welcome email for a client the admin added directly (e.g. a Fiverr
+ * client whose account was created on their behalf, not through the
+ * normal self-serve checkout). Reuses the exact same reset-token mechanism
+ * as sendPasswordResetEmail — the account is created with a random,
+ * unusable password, and this email is the client's only way to actually
+ * set one they know. Deliberately worded as a welcome, not a "reset,"
+ * since nothing is actually being reset for them.
+ */
+async function sendWelcomeSetPasswordEmail(toAddress, resetUrl, creatorName) {
+  const mailer = getMailer();
+  if (!mailer) {
+    throw new Error('SMTP is not configured (SMTP_HOST is missing or still the placeholder value)');
+  }
+
+  await mailer.sendMail({
+    from: process.env.REPORT_FROM_EMAIL,
+    to: toAddress,
+    subject: 'Welcome to SentryVo — set up your account',
+    text: `Hi ${creatorName},\n\nYour SentryVo account has been set up and is already active — daily scanning and takedown protection has started. Click the link below to set your password and log in:\n\n${resetUrl}\n\nThis link expires in 1 hour and can only be used once. If you have any questions, just reply to this email.`,
+    html: `
+      <div style="font-family:Arial,sans-serif; max-width:480px; margin:0 auto; color:#1a1a2e;">
+        <h2 style="color:#0096F5;">Welcome to SentryVo</h2>
+        <p>Hi ${creatorName},</p>
+        <p>Your account has been set up and is already active — daily scanning and takedown protection has started. Click below to set your password and log in to your dashboard.</p>
+        <p style="margin:28px 0;">
+          <a href="${resetUrl}" style="background:#0096F5; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">Set Your Password</a>
+        </p>
+        <p style="font-size:.85rem; color:#666;">This link expires in 1 hour and can only be used once. If you have any questions, just reply to this email.</p>
+      </div>
+    `,
+  });
+}
+
+/**
  * Builds and sends ONE consolidated email to the admin, aggregating every
  * "needs manual action" leak across ALL active subscribers — not per-client.
  * Grouped by creator, then split into the two categories that need
@@ -230,4 +264,5 @@ module.exports = {
   sendTestEmail,
   sendPasswordResetEmail,
   sendAdminDigestEmail,
+  sendWelcomeSetPasswordEmail,
 };

@@ -55,6 +55,12 @@ async function initSchema() {
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_id INTEGER REFERENCES agencies(id);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'individual';
+    -- Tracks how the account was created — 'direct' (self-registered
+    -- through Lemon Squeezy checkout, the normal flow) or 'fiverr' (added
+    -- directly by the admin for a client who paid through Fiverr instead).
+    -- Purely for the admin's own reference — doesn't change how the
+    -- account behaves once active.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'direct';
     -- role is one of: 'individual' (existing single/multi subscribers, unaffected),
     -- 'agency_owner' (manages a roster, billed via Lemon Squeezy like before),
     -- 'agency_member' (a creator added by an agency owner, no separate billing)
@@ -180,18 +186,19 @@ async function countAgencyMembers(agencyId) {
 }
 
 // ---------- Users ----------
-async function createUser({ name, email, mobile, passwordHash, plan, platforms, checkoutRef, agencyId = null, role = 'individual' }) {
+async function createUser({ name, email, mobile, passwordHash, plan, platforms, checkoutRef, agencyId = null, role = 'individual', source = 'direct', status = null }) {
   const reportFrequencyDays = plan === 'multi' ? 1 : 3;
+  // Explicit status wins if given (used for admin-added Fiverr clients, who
+  // are active immediately with no Lemon Squeezy checkout at all) —
+  // otherwise falls back to the existing rule: agency members are active
+  // immediately since the agency already pays, everyone else starts
+  // pending_payment until their checkout webhook fires.
+  const resolvedStatus = status || (role === 'agency_member' ? 'active' : 'pending_payment');
   const result = await pool.query(
-    `INSERT INTO users (name, email, mobile, password_hash, plan, platforms, checkout_ref, report_frequency_days, status, agency_id, role)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO users (name, email, mobile, password_hash, plan, platforms, checkout_ref, report_frequency_days, status, agency_id, role, source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id`,
-    [
-      name, email, mobile, passwordHash, plan, platforms, checkoutRef, reportFrequencyDays,
-      role === 'agency_member' ? 'active' : 'pending_payment', // members are active immediately, the agency (owner) already pays
-      agencyId,
-      role,
-    ]
+    [name, email, mobile, passwordHash, plan, platforms, checkoutRef, reportFrequencyDays, resolvedStatus, agencyId, role, source]
   );
   return result.rows[0].id;
 }
@@ -437,7 +444,7 @@ async function markLeaksDigestSent(leakIds) {
 // access or a separate admin panel.
 async function findUsersByAliasOrEmail(searchTerm) {
   const result = await pool.query(
-    `SELECT DISTINCT u.id, u.name, u.email, u.status, u.plan, u.platforms, u.created_at,
+    `SELECT DISTINCT u.id, u.name, u.email, u.status, u.plan, u.platforms, u.source, u.created_at,
             array_agg(DISTINCT a.alias) AS aliases
      FROM users u
      LEFT JOIN aliases a ON a.user_id = u.id

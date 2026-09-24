@@ -958,6 +958,80 @@ app.get('/api/admin/send-digest-now', async (req, res) => {
   }
 });
 
+// ---------------- Admin: add a client directly (e.g. a Fiverr client) ----------------
+// Usage: POST https://api.sentryvo.com/api/admin/add-client?key=YOUR_ADMIN_KEY
+// Body: { name, email, mobile, plan, platforms, aliases, originalLinks }
+//
+// Creates an account that's active IMMEDIATELY, with no Lemon Squeezy
+// checkout at all — for a client who already paid you outside SentryVo
+// (e.g. through a Fiverr order) and you're setting up their protection
+// directly. The account gets a random, unusable password; the client
+// receives a welcome email with a link to set their own real password —
+// you never see or handle their actual password yourself.
+app.post('/api/admin/add-client', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const { name, email, mobile, plan, platforms, aliases, originalLinks } = req.body || {};
+
+    if (!name || !email || !plan) {
+      return res.status(400).json({ error: 'name, email and plan are required' });
+    }
+    if (!['single', 'multi'].includes(plan)) {
+      return res.status(400).json({ error: 'plan must be "single" or "multi"' });
+    }
+
+    const existing = await db.getUserByEmail(email);
+    if (existing) {
+      return res.status(409).json({ error: 'An account with this email already exists.' });
+    }
+
+    const platformList = Array.isArray(platforms) ? platforms : String(platforms || '').split(',').map((p) => p.trim()).filter(Boolean);
+    if (!platformList.length) {
+      return res.status(400).json({ error: 'Select at least one platform' });
+    }
+
+    // Random, unusable password — the client sets their own real one via
+    // the welcome email below. Nobody (including the admin) ever knows
+    // this placeholder value.
+    const randomPassword = crypto.randomBytes(24).toString('hex');
+    const passwordHash = bcrypt.hashSync(randomPassword, 10);
+
+    const userId = await db.createUser({
+      name,
+      email,
+      mobile: mobile || '',
+      passwordHash,
+      plan,
+      platforms: platformList.join(','),
+      checkoutRef: null,
+      source: 'fiverr',
+      status: 'active', // active immediately — no checkout webhook needed
+    });
+
+    const aliasList = Array.isArray(aliases) ? aliases : String(aliases || '').split(',').map((a) => a.trim());
+    await db.addAliases(userId, aliasList.length ? aliasList : [name]);
+
+    const linkList = Array.isArray(originalLinks) ? originalLinks : String(originalLinks || '').split('\n').map((l) => l.trim());
+    await db.addOriginalLinks(userId, linkList.filter(Boolean));
+
+    // Send the client a real, working "set your password" link — reuses
+    // the same token mechanism as the forgot-password flow.
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_DURATION_MS);
+    await db.createPasswordResetToken(token, userId, expiresAt);
+    const siteUrl = process.env.SENTRYVO_SITE_URL || 'https://www.sentryvo.com';
+    const resetUrl = `${siteUrl}/reset-password.html?token=${token}`;
+
+    const { sendWelcomeSetPasswordEmail } = require('./emailReport');
+    await sendWelcomeSetPasswordEmail(email, resetUrl, name);
+
+    res.json({ ok: true, userId, message: `${name} added and active — a welcome email with a password-setup link was sent to ${email}` });
+  } catch (err) {
+    console.error('Admin add-client error:', err.message);
+    res.status(500).json({ error: 'Could not create the client account. Please try again shortly.' });
+  }
+});
+
 const PORT = process.env.PORT || 4242;
 
 // Wait for the database schema to be ready before accepting traffic —

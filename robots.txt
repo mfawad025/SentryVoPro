@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Private/account pages — not useful in search results, and dashboard
+# pages should never be indexed since they're meant to show a logged-in
+# user's own data, not public content.
+Disallow: /dashboard.html
+Disallow: /agency-dashboard.html
+Disallow: /admin-add-client.html
+Disallow: /reset-password.html
+Disallow: /success.html
+Disallow: /failure.html
+
+Sitemap: https://www.sentryvo.com/sitemap.xml

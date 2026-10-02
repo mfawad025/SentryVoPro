@@ -322,6 +322,31 @@ async function getAliasesForUser(userId) {
   return result.rows.map((r) => r.alias);
 }
 
+// Wipes a user's existing aliases and replaces them with a fresh list — for
+// fixing aliases that were entered wrong (e.g. full phrases like "kitsykat
+// nude" instead of just "kitsykat"), not for routine additions. Runs inside
+// a transaction so a failed insert can't leave the user with zero aliases.
+async function replaceAliases(userId, aliasList) {
+  const clean = [...new Set(aliasList.map((a) => a.trim()).filter(Boolean))];
+  if (!clean.length) throw new Error('At least one alias is required');
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM aliases WHERE user_id = $1`, [userId]);
+    for (const alias of clean) {
+      await client.query(`INSERT INTO aliases (user_id, alias) VALUES ($1, $2)`, [userId, alias]);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return clean;
+}
+
 // ---------- Original content links (proof of ownership, NOT infringing links) ----------
 async function addOriginalLinks(userId, urlList) {
   const clean = urlList.filter(Boolean);
@@ -514,6 +539,7 @@ module.exports = {
   deleteSiteContactEmail,
   listSiteContactEmails,
   addAliases,
+  replaceAliases,
   getAliasesForUser,
   addOriginalLinks,
   getOriginalLinksForUser,

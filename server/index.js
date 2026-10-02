@@ -691,6 +691,37 @@ function checkAdminKey(req, res) {
   return true;
 }
 
+// Usage: POST https://api.sentryvo.com/api/admin/replace-aliases?key=YOUR_ADMIN_KEY
+// Body: { userId, aliases: ["kitsykat", "jaxi asmr"] }
+//
+// Wipes this user's existing aliases and replaces them with the given list
+// — for fixing aliases that were entered wrong (e.g. full search phrases
+// like "kitsykat nude" or "kitsykat only fans" instead of just the plain
+// stage name "kitsykat"). buildTextQueries() in scanner.js already adds
+// "leaked", "nude", "naked", platform names, and site: filters around
+// whatever you put here — so this field should only ever hold the bare
+// name/username to monitor, nothing more.
+app.post('/api/admin/replace-aliases', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const { userId, aliases } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    const aliasList = Array.isArray(aliases)
+      ? aliases
+      : String(aliases || '').split(',').map((a) => a.trim());
+
+    const user = await db.getUserById(userId);
+    if (!user) return res.status(404).json({ error: `No user found with id ${userId}` });
+
+    const saved = await db.replaceAliases(userId, aliasList);
+    res.json({ ok: true, message: `Aliases for ${user.email} replaced`, aliases: saved });
+  } catch (err) {
+    console.error('Admin replace-aliases failed:', err.message);
+    res.status(400).json({ error: err.message || 'Could not replace aliases' });
+  }
+});
+
 // Usage: https://api.sentryvo.com/api/admin/find-user?alias=kitsykat&key=YOUR_ADMIN_KEY
 // Searches both aliases and email addresses (partial match, case-insensitive).
 app.get('/api/admin/find-user', async (req, res) => {

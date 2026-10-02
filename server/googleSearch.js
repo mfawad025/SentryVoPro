@@ -55,7 +55,13 @@ async function runQuery(path, query) {
       'X-API-KEY': apiKey,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ q: query, num: 10 }),
+    // num:30 — each query shape (e.g. `"alias" leaked`, `"alias" site:reddit.com`)
+    // previously only looked at the top 10 Google results for that exact
+    // phrasing before moving to the next query. Raised to 30 so a single
+    // query can surface more of what's actually out there, since the
+    // scanner already runs several narrow query shapes per alias rather
+    // than one broad one.
+    body: JSON.stringify({ q: query, num: 30 }),
   });
 
   if (!res.ok) {

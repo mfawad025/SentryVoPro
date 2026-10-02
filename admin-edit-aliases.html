@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit Client Aliases — SentryVo Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section style="padding:60px 0;">
+  <div class="wrap" style="max-width:640px;">
+    <div style="background:var(--ink-2); border:1px solid var(--line); border-radius:16px; padding:40px;">
+      <span class="eyebrow">Admin Only — Not Linked From Site Navigation</span>
+      <h2 style="margin:8px 0 6px;">Edit a client's aliases</h2>
+      <p style="font-size:.88rem; color:var(--text-low); margin-bottom:28px;">
+        Use this to fix or replace a client's monitored stage names/usernames.
+        Enter only the plain name itself (e.g. <code>kitsykat</code>) — the scanner
+        automatically adds "leaked", "nude", platform names, and site filters
+        around it, so don't type those into this field yourself.
+      </p>
+
+      <!-- Step 1: find the client -->
+      <div class="field">
+        <label for="admin-key">Admin key</label>
+        <input type="password" id="admin-key" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="search-term">Find client by alias or email</label>
+        <input type="text" id="search-term" placeholder="e.g. kitsykat or client@email.com">
+      </div>
+      <button type="button" class="btn btn-block" id="search-submit">Find Client</button>
+      <p class="confirm-note" id="search-status" style="min-height:1.2em; font-size:.82rem; margin-top:12px; text-align:center;"></p>
+
+      <!-- Step 2: shown once a client is found -->
+      <div id="edit-panel" style="display:none; margin-top:28px; padding-top:28px; border-top:1px solid var(--line);">
+        <p style="font-size:.9rem; margin-bottom:16px;">
+          Editing: <strong id="client-label"></strong>
+        </p>
+        <div class="field">
+          <label for="client-aliases">Aliases (comma separated) — this REPLACES the full list</label>
+          <textarea id="client-aliases" rows="3" placeholder="kitsykat, jaxi asmr"></textarea>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" id="save-submit">Save Aliases</button>
+        <p class="confirm-note" id="save-status" style="min-height:1.2em; font-size:.82rem; margin-top:12px; text-align:center;"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="script.js"></script>
+<script>
+  let currentUserId = null;
+
+  document.getElementById('search-submit').addEventListener('click', async function () {
+    const btn = this;
+    const statusEl = document.getElementById('search-status');
+    const adminKey = document.getElementById('admin-key').value.trim();
+    const term = document.getElementById('search-term').value.trim();
+
+    if (!adminKey || !term) {
+      statusEl.textContent = 'Enter the admin key and a search term first.';
+      statusEl.style.color = '#0096F5';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Searching…';
+    statusEl.textContent = '';
+    document.getElementById('edit-panel').style.display = 'none';
+
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/admin/find-user?q=${encodeURIComponent(term)}&key=${encodeURIComponent(adminKey)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Search failed');
+      if (!data.count) throw new Error('No client found matching that alias/email.');
+      if (data.count > 1) throw new Error(`Found ${data.count} matching clients — search something more specific (e.g. their exact email).`);
+
+      const user = data.users[0];
+      currentUserId = user.id;
+      document.getElementById('client-label').textContent = `${user.name} (${user.email})`;
+      document.getElementById('client-aliases').value = (user.aliases || []).filter(Boolean).join(', ');
+      document.getElementById('edit-panel').style.display = 'block';
+      statusEl.textContent = 'Client found — edit the aliases below.';
+      statusEl.style.color = 'var(--sage)';
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Find Client';
+    }
+  });
+
+  document.getElementById('save-submit').addEventListener('click', async function () {
+    const btn = this;
+    const statusEl = document.getElementById('save-status');
+    const adminKey = document.getElementById('admin-key').value.trim();
+    const aliases = document.getElementById('client-aliases').value.trim();
+
+    if (!currentUserId) return;
+    if (!aliases) {
+      statusEl.textContent = 'Enter at least one alias.';
+      statusEl.style.color = '#0096F5';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    statusEl.textContent = '';
+
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/admin/replace-aliases?key=${encodeURIComponent(adminKey)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, aliases }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save aliases');
+
+      statusEl.textContent = `Saved: ${data.aliases.join(', ')}`;
+      statusEl.style.color = 'var(--sage)';
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Aliases';
+    }
+  });
+</script>
+</body>
+</html>

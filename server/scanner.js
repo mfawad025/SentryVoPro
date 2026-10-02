@@ -40,11 +40,16 @@ const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform } = require('./constants');
 // tends to turn up.
 const LEAK_PRONE_SITES = ['reddit.com', 't.me', 'x.com', 'tumblr.com'];
 
+// Leak-related terms searched alongside the alias itself. This list is the
+// right place for "nude", "naked", etc. — NOT the aliases field. An alias
+// should be just the stage name/username to monitor; this function is what
+// builds the actual leak-flavored queries around it, each as its own clean
+// `"<alias>" <term>` query rather than cramming the term into the alias and
+// accidentally quoting the whole thing as one rigid literal phrase.
+const LEAK_TERMS = ['leaked', 'nude', 'naked', 'leaked photos OR videos'];
+
 function buildTextQueries(alias, platforms) {
-  const queries = [
-    `"${alias}" leaked`,
-    `"${alias}" leaked photos OR videos`,
-  ];
+  const queries = LEAK_TERMS.map((term) => `"${alias}" ${term}`);
   // One query per platform the subscriber is actually on — sharper signal
   // than a generic query, and keeps quota usage proportional to relevance.
   platforms.forEach((platform) => {
@@ -370,9 +375,17 @@ async function runDailyScanForUser(user) {
   // The creator's own official links — never flag these as leaks, see isOwnContent().
   const originalLinks = await db.getOriginalLinksForUser(user.id);
 
+  // Tracks queries that threw (Serper quota/rate-limit/network errors, etc.)
+  // so a run with a lot of silent failures is visible in the summary
+  // instead of just quietly returning fewer leaks than expected.
+  let queriesRun = 0;
+  let queriesFailed = 0;
+  const failureReasons = [];
+
   for (const alias of aliases) {
     // Text search: leak-site mentions, forum posts, social platform posts
     for (const query of buildTextQueries(alias, platforms)) {
+      queriesRun++;
       try {
         const results = await searchGoogle(query);
         for (const result of results) {
@@ -388,12 +401,15 @@ async function runDailyScanForUser(user) {
           }
         }
       } catch (err) {
+        queriesFailed++;
+        failureReasons.push(err.message);
         console.warn(`Text scan failed for alias "${alias}" (user ${user.email}):`, err.message);
       }
     }
 
     // Image search: reposted photos on Google Images
     for (const query of buildImageQueries(alias)) {
+      queriesRun++;
       try {
         const results = await searchGoogleImages(query);
         for (const result of results) {
@@ -409,9 +425,23 @@ async function runDailyScanForUser(user) {
           }
         }
       } catch (err) {
+        queriesFailed++;
+        failureReasons.push(err.message);
         console.warn(`Image scan failed for alias "${alias}" (user ${user.email}):`, err.message);
       }
     }
+  }
+
+  // If a meaningful share of this user's queries errored out (Serper quota
+  // exhausted, rate-limited, down, etc.), say so loudly in the logs — a scan
+  // that silently loses most of its queries looks identical to "there's
+  // just nothing out there" otherwise, which is misleading.
+  if (queriesFailed > 0) {
+    const uniqueReasons = [...new Set(failureReasons)].slice(0, 3);
+    console.warn(
+      `Scan for ${user.email}: ${queriesFailed}/${queriesRun} queries failed. ` +
+      `Sample error(s): ${uniqueReasons.join(' | ')}`
+    );
   }
 
   // Attempt takedown notices for anything newly found — grouped by domain
@@ -489,10 +519,17 @@ async function runDailyScanForUser(user) {
     await db.logReportSent(user.id, leaksSinceLastReport.length);
     await db.markReportSentNow(user.id);
 
-    return { user: user.email, reportSent: true, newLeaks: leaksSinceLastReport.length, summary };
+    return {
+      user: user.email,
+      reportSent: true,
+      newLeaks: leaksSinceLastReport.length,
+      summary,
+      queriesRun,
+      queriesFailed,
+    };
   }
 
-  return { user: user.email, reportSent: false };
+  return { user: user.email, reportSent: false, queriesRun, queriesFailed };
 }
 
 async function runDailyScanForAllUsers() {

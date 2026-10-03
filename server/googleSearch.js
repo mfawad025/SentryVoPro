@@ -55,13 +55,13 @@ async function runQuery(path, query) {
       'X-API-KEY': apiKey,
       'Content-Type': 'application/json',
     },
-    // num:30 — each query shape (e.g. `"alias" leaked`, `"alias" site:reddit.com`)
-    // previously only looked at the top 10 Google results for that exact
-    // phrasing before moving to the next query. Raised to 30 so a single
-    // query can surface more of what's actually out there, since the
-    // scanner already runs several narrow query shapes per alias rather
-    // than one broad one.
-    body: JSON.stringify({ q: query, num: 30 }),
+    // num:60 — the scanner was redesigned to run FEWER, more targeted
+    // queries per alias (2 fixed terms + up to 2 platform-specific ones,
+    // see buildTextQueries in scanner.js) instead of many narrow variations.
+    // Raised from 30 to 60 to go deeper on each of those fewer queries,
+    // rather than wide across many — net Serper usage per alias stays
+    // roughly flat (~4 queries x 60 vs. the old ~9 queries x 30).
+    body: JSON.stringify({ q: query, num: 60 }),
   });
 
   if (!res.ok) {

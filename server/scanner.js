@@ -35,29 +35,24 @@ const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform } = require('./constants');
 // report includes a ready reference link so submitting manually takes
 // seconds instead of research time.
 
-// Known leak-prone destinations worth checking specifically, beyond a plain
-// web search. Extend this list as you learn where your subscribers' content
-// tends to turn up.
-const LEAK_PRONE_SITES = ['reddit.com', 't.me', 'x.com', 'tumblr.com'];
+// Fixed leak-related terms searched alongside every alias. Kept deliberately
+// short (2 terms) — combined with up to 2 platform-specific queries below,
+// that's 3-4 total queries per alias, each going deeper (see num:60 in
+// googleSearch.js) rather than running many shallow query variations.
+const LEAK_TERMS = ['leaked', 'nude'];
 
-// Leak-related terms searched alongside the alias itself. This list is the
-// right place for "nude", "naked", etc. — NOT the aliases field. An alias
-// should be just the stage name/username to monitor; this function is what
-// builds the actual leak-flavored queries around it, each as its own clean
-// `"<alias>" <term>` query rather than cramming the term into the alias and
-// accidentally quoting the whole thing as one rigid literal phrase.
-const LEAK_TERMS = ['leaked', 'nude', 'naked', 'leaked photos OR videos'];
+// Caps how many of the client's own platforms get their own query, so the
+// total per alias never exceeds LEAK_TERMS.length + MAX_PLATFORM_QUERIES.
+const MAX_PLATFORM_QUERIES = 2;
 
 function buildTextQueries(alias, platforms) {
   const queries = LEAK_TERMS.map((term) => `"${alias}" ${term}`);
-  // One query per platform the subscriber is actually on — sharper signal
-  // than a generic query, and keeps quota usage proportional to relevance.
-  platforms.forEach((platform) => {
-    queries.push(`"${alias}" ${platform} leaked`);
-  });
-  // Site-restricted checks across common re-posting/leak destinations
-  LEAK_PRONE_SITES.forEach((site) => {
-    queries.push(`"${alias}" site:${site}`);
+  // Only the platform(s) this specific client actually works on — e.g.
+  // "kitsykat onlyfans" if she's on OnlyFans, skipped entirely if she isn't
+  // on any listed platform. Capped at 2 so a client with many platforms
+  // doesn't blow past the 3-4 query target.
+  platforms.slice(0, MAX_PLATFORM_QUERIES).forEach((platform) => {
+    queries.push(`"${alias}" ${platform}`);
   });
   return queries;
 }

@@ -55,13 +55,16 @@ async function runQuery(path, query) {
       'X-API-KEY': apiKey,
       'Content-Type': 'application/json',
     },
-    // num:60 — the scanner was redesigned to run FEWER, more targeted
-    // queries per alias (2 fixed terms + up to 2 platform-specific ones,
-    // see buildTextQueries in scanner.js) instead of many narrow variations.
-    // Raised from 30 to 60 to go deeper on each of those fewer queries,
-    // rather than wide across many — net Serper usage per alias stays
-    // roughly flat (~4 queries x 60 vs. the old ~9 queries x 30).
-    body: JSON.stringify({ q: query, num: 60 }),
+    // num:20 — num:60 (and likely num:30 before it) triggered Serper's
+    // "Query pattern not allowed for free accounts" HTTP 400 on every
+    // request, breaking both the free-scan tool and the daily subscriber
+    // scans entirely. Free/trial Serper accounts appear to cap the num
+    // parameter well below what paid plans allow. Dropped to 20 — a modest
+    // increase over the original 10, confirmed safe to test incrementally
+    // from here rather than guessing the exact ceiling. If this still
+    // errors, drop to 10 (the original, known-working value) and contact
+    // Serper support to ask the exact free-tier cap, or upgrade the account.
+    body: JSON.stringify({ q: query, num: 20 }),
   });
 
   if (!res.ok) {

@@ -55,16 +55,17 @@ async function runQuery(path, query) {
       'X-API-KEY': apiKey,
       'Content-Type': 'application/json',
     },
-    // num:20 — num:60 (and likely num:30 before it) triggered Serper's
-    // "Query pattern not allowed for free accounts" HTTP 400 on every
-    // request, breaking both the free-scan tool and the daily subscriber
-    // scans entirely. Free/trial Serper accounts appear to cap the num
-    // parameter well below what paid plans allow. Dropped to 20 — a modest
-    // increase over the original 10, confirmed safe to test incrementally
-    // from here rather than guessing the exact ceiling. If this still
-    // errors, drop to 10 (the original, known-working value) and contact
-    // Serper support to ask the exact free-tier cap, or upgrade the account.
-    body: JSON.stringify({ q: query, num: 20 }),
+    // num:60 and num:20 BOTH triggered Serper's "Query pattern not allowed
+    // for free accounts" HTTP 400 on every request — confirmed live via
+    // Render logs after each deploy, so this isn't a fluke or a caching
+    // issue. Reverting all the way to num:10, the original value that was
+    // in place and presumably working before this session's changes.
+    // If num:10 ALSO fails with the same "free accounts" message, the
+    // `num` parameter is not the actual cause — the Serper.dev account
+    // itself (plan/billing/key status) needs to be checked directly on
+    // https://serper.dev dashboard, since the error is coming from Serper
+    // rejecting the account/query pattern, not from anything in this code.
+    body: JSON.stringify({ q: query, num: 10 }),
   });
 
   if (!res.ok) {

@@ -58,10 +58,10 @@ async function runQuery(path, query) {
     // num above 10 is rejected on Serper's free trial ("Query pattern not
     // allowed for free accounts") and needs a paid credit pack — now
     // purchased. Requests for 11-100 results cost 2 credits instead of 1
-    // (and 60 costs the same as 100). If the 400 error ever returns, the
+    // (100 costs the same as 60). If the 400 error ever returns, the
     // paid credits have likely run out or expired (6-month validity) —
     // check the Serper dashboard and drop this to 10 as a stopgap.
-    body: JSON.stringify({ q: query, num: 60 }),
+    body: JSON.stringify({ q: query, num: 100 }),
   });
 
   if (!res.ok) {

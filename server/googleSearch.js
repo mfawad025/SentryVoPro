@@ -55,14 +55,13 @@ async function runQuery(path, query) {
       'X-API-KEY': apiKey,
       'Content-Type': 'application/json',
     },
-    // num:60 fails with "Query pattern not allowed for free accounts" even
-    // on a freshly-regenerated, confirmed-valid API key — so it IS a
-    // num-value cap tied to the free/trial Serper plan, not a stale-key
-    // issue (that was a coincidence/misdiagnosis). Back to num:10, the
-    // highest value confirmed working on the free plan. Raising this
-    // again requires upgrading the Serper.dev plan first — see the
-    // account owner for current pricing before changing this value.
-    body: JSON.stringify({ q: query, num: 10 }),
+    // num above 10 is rejected on Serper's free trial ("Query pattern not
+    // allowed for free accounts") and needs a paid credit pack — now
+    // purchased. Requests for 11-100 results cost 2 credits instead of 1
+    // (and 60 costs the same as 100). If the 400 error ever returns, the
+    // paid credits have likely run out or expired (6-month validity) —
+    // check the Serper dashboard and drop this to 10 as a stopgap.
+    body: JSON.stringify({ q: query, num: 60 }),
   });
 
   if (!res.ok) {

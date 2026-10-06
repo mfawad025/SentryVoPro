@@ -217,12 +217,13 @@ async function attemptTakedownNotice(leak, user, originalLinks) {
   if (hostingOrg) await db.setLeakHostingProvider(leak.id, hostingOrg);
 
   // Safety net: if the resolved hosting provider or abuse contact turns out
-  // to be Reddit, never email it — Reddit only accepts copyright reports
-  // through its own form, so route this to manual review instead.
-  const looksLikeReddit =
-    /reddit/i.test(hostingOrg || '') ||
-    targetEmails.some((e) => /@([a-z0-9-]+\.)*(reddit|redditinc)\.com$/i.test(e));
-  if (looksLikeReddit) {
+  // to be one of the big platforms below, never email it — they only accept
+  // copyright reports through their own forms, so route this to manual
+  // review instead. (Domains are handled by isMajorPlatform; this catches
+  // media/CDN hosts that resolve to the platform's own network.)
+  const BIG_PLATFORM_ORG = /reddit|twitter|\bx corp|facebook|meta platforms|instagram|tiktok|bytedance|pinterest|snap inc|tumblr|linkedin/i;
+  const BIG_PLATFORM_EMAIL = /@([a-z0-9-]+\.)*(reddit|redditinc|twitter|x|fb|facebook|meta|instagram|tiktok|bytedance|pinterest|snap|tumblr|linkedin)\.com$/i;
+  if (BIG_PLATFORM_ORG.test(hostingOrg || '') || targetEmails.some((e) => BIG_PLATFORM_EMAIL.test(e))) {
     return { sent: false, reason: 'major_platform' };
   }
 

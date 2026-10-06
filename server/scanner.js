@@ -22,6 +22,7 @@ const fetch = require('node-fetch');
 const nodemailer = require('nodemailer');
 const { searchGoogle, searchGoogleImages } = require('./googleSearch');
 const db = require('./db');
+const fingerprint = require('./fingerprint');
 const { sendDailyReportEmail } = require('./emailReport');
 const { lookupHostingAndAbuseContacts, findSiteContactEmail, extractMediaLinksFromPage } = require('./hostLookup');
 const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform } = require('./constants');
@@ -78,6 +79,11 @@ function matchesAlias(alias, ...fields) {
   if (!needle) return false;
   return normalizeForMatch(fields.join(' ')).includes(needle);
 }
+
+// Image-fingerprint limits: at most this many images downloaded per client
+// per scan (keeps scan time and bandwidth bounded), in small parallel batches.
+const MAX_IMAGE_DOWNLOADS_PER_SCAN = 150;
+const FINGERPRINT_BATCH = 5;
 
 function buildImageQueries(alias) {
   return [`"${alias}" leaked photos`];
@@ -398,7 +404,14 @@ async function runDailyScanForUser(user) {
   let queriesRun = 0;
   let queriesFailed = 0;
   let irrelevantSkipped = 0;
+  let fingerprintMatches = 0;
   const failureReasons = [];
+
+  // Hashes of this client's original photos (see fingerprint.js). Empty
+  // for clients who haven't had any uploaded — they just get the normal
+  // alias-based scan.
+  const fingerprints = await db.getFingerprintsForUser(user.id);
+  let fingerprintBudget = MAX_IMAGE_DOWNLOADS_PER_SCAN;
 
   for (const alias of aliases) {
     // Text search: leak-site mentions, forum posts, social platform posts
@@ -435,22 +448,51 @@ async function runDailyScanForUser(user) {
       queriesRun++;
       try {
         const results = await searchGoogleImages(query);
+
+        // Drop the client's own pages and anything already saved first, so
+        // no image is downloaded for a result we wouldn't keep anyway.
+        const fresh = [];
         for (const result of results) {
           if (isOwnContent(result.url, originalLinks)) continue;
-          if (!matchesAlias(alias, result.url, result.title, result.snippet)) {
+          if (await db.leakExists(user.id, result.url)) continue;
+          fresh.push(result);
+        }
+
+        // Fingerprint check: compare each new image against the client's
+        // original photos. A match is proof the image IS their content, so
+        // it is kept even if the alias isn't in the page text.
+        const distances = new Array(fresh.length).fill(null);
+        if (fingerprints.length) {
+          for (let i = 0; i < fresh.length && fingerprintBudget > 0; i += FINGERPRINT_BATCH) {
+            const batch = fresh.slice(i, i + FINGERPRINT_BATCH);
+            fingerprintBudget -= batch.length;
+            const hashes = await Promise.all(
+              batch.map((r) => fingerprint.hashImageUrl(r.thumbnail || r.url))
+            );
+            hashes.forEach((h, j) => {
+              distances[i + j] = fingerprint.bestMatch(h, fingerprints);
+            });
+          }
+        }
+
+        for (let i = 0; i < fresh.length; i++) {
+          const result = fresh[i];
+          const distance = distances[i];
+          const textMatch = matchesAlias(alias, result.url, result.title, result.snippet);
+          if (!textMatch && distance === null) {
             irrelevantSkipped++;
             continue;
           }
-          if (!(await db.leakExists(user.id, result.url))) {
-            await db.insertLeak({
-              userId: user.id,
-              url: result.url,
-              title: result.title,
-              source: 'serper_image',
-              matchedAlias: alias,
-              snippet: result.snippet,
-            });
-          }
+          if (distance !== null) fingerprintMatches++;
+          await db.insertLeak({
+            userId: user.id,
+            url: result.url,
+            title: distance !== null ? `[Verified match] ${result.title || result.url}` : result.title,
+            source: 'serper_image',
+            matchedAlias: alias,
+            snippet: result.snippet,
+            fingerprintDistance: distance,
+          });
         }
       } catch (err) {
         queriesFailed++;
@@ -485,7 +527,7 @@ async function runDailyScanForUser(user) {
   const pendingLeaks = await db.getLeaksByStatus(user.id, 'found');
   const newlyFound = [];
   for (const leak of pendingLeaks) {
-    if (leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title, leak.snippet)) {
+    if (leak.fingerprint_distance == null && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title, leak.snippet)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
     } else {
@@ -570,10 +612,11 @@ async function runDailyScanForUser(user) {
       summary,
       queriesRun,
       queriesFailed,
+      fingerprintMatches,
     };
   }
 
-  return { user: user.email, reportSent: false, queriesRun, queriesFailed };
+  return { user: user.email, reportSent: false, queriesRun, queriesFailed, fingerprintMatches };
 }
 
 async function runDailyScanForAllUsers() {

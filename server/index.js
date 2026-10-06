@@ -36,6 +36,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const { buildCheckoutUrl, verifyWebhookSignature } = require('./lemonsqueezy');
 const { startDailyScanCron } = require('./cron');
+const fingerprint = require('./fingerprint');
 const { searchGoogle } = require('./googleSearch');
 
 const app = express();
@@ -95,6 +96,46 @@ app.post(
       // Still 200 so Lemon Squeezy doesn't hammer retries for a parsing bug
       // on our side while we fix it — but log loudly so it gets noticed.
       res.status(200).json({ received: true, error: 'processing_failed' });
+    }
+  }
+);
+
+// ---------------- Content fingerprints (admin) ----------------
+// Usage: POST https://api.sentryvo.com/api/admin/fingerprint/add?key=ADMIN_KEY&userId=ID
+// Body: the raw image file (Content-Type: image/jpeg, image/png, image/webp...)
+//
+// Stores only a 16-character perceptual hash of the client's ORIGINAL photo
+// — the image itself is discarded immediately. The scanner then recognises
+// re-uploads of that photo (see fingerprint.js). Registered BEFORE the
+// general express.json() parser because the body is a raw image, not JSON.
+app.post(
+  '/api/admin/fingerprint/add',
+  express.raw({ type: 'image/*', limit: '12mb' }),
+  async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    try {
+      const userId = Number(req.query.userId);
+      if (!userId) return res.status(400).json({ error: 'userId is required' });
+      const user = await db.getUserById(userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (!Buffer.isBuffer(req.body) || !req.body.length) {
+        return res.status(400).json({ error: 'Send the image file as the raw request body (Content-Type: image/*)' });
+      }
+
+      const hashed = await fingerprint.hashImageBuffer(req.body);
+      if (!hashed) {
+        return res.status(422).json({ error: 'Could not fingerprint this image (unreadable, or too plain/uniform to be distinctive).' });
+      }
+
+      const outcome = await db.addFingerprint(userId, hashed.hash);
+      if (outcome === 'limit') {
+        return res.status(409).json({ error: `Limit reached (${db.MAX_FINGERPRINTS_PER_USER} fingerprints per client).` });
+      }
+      const total = await db.countFingerprints(userId);
+      res.json({ ok: true, outcome, total });
+    } catch (err) {
+      console.error('Fingerprint add error:', err.message);
+      res.status(500).json({ error: 'Could not process this image.' });
     }
   }
 );
@@ -690,6 +731,32 @@ function checkAdminKey(req, res) {
   }
   return true;
 }
+
+// Usage: https://api.sentryvo.com/api/admin/fingerprint/count?userId=ID&key=YOUR_ADMIN_KEY
+app.get('/api/admin/fingerprint/count', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const userId = Number(req.query.userId);
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    res.json({ ok: true, userId, total: await db.countFingerprints(userId) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Usage: https://api.sentryvo.com/api/admin/fingerprint/clear?userId=ID&key=YOUR_ADMIN_KEY&confirm=yes
+// Removes all stored fingerprints for one client (e.g. to re-upload a cleaner set).
+app.get('/api/admin/fingerprint/clear', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const userId = Number(req.query.userId);
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    if (req.query.confirm !== 'yes') return res.status(400).json({ error: 'Add &confirm=yes to confirm' });
+    res.json({ ok: true, removed: await db.clearFingerprints(userId) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Usage: POST https://api.sentryvo.com/api/admin/replace-aliases?key=YOUR_ADMIN_KEY
 // Body: { userId, aliases: ["kitsykat", "jaxi asmr"] }

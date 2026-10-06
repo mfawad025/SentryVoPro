@@ -111,6 +111,22 @@ async function initSchema() {
     -- and are excluded from reports, dashboards and takedown notices.
     ALTER TABLE leaks ADD COLUMN IF NOT EXISTS snippet TEXT;
 
+    -- Set when an image found online matched one of the client's original
+    -- photos by content fingerprint (value = number of differing bits out of
+    -- 64; lower is closer). Such leaks are verified by the image itself, so
+    -- they are exempt from the alias-in-text relevance check.
+    ALTER TABLE leaks ADD COLUMN IF NOT EXISTS fingerprint_distance INTEGER;
+
+    -- Perceptual hashes of a client's ORIGINAL photos (never the images
+    -- themselves). Used to recognise re-uploads of the same photo.
+    CREATE TABLE IF NOT EXISTS content_fingerprints (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      hash TEXT NOT NULL,
+      added_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, hash)
+    );
+
     CREATE TABLE IF NOT EXISTS reports_sent (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -360,6 +376,35 @@ async function addOriginalLinks(userId, urlList) {
   }
 }
 
+// ---------- Content fingerprints ----------
+const MAX_FINGERPRINTS_PER_USER = 300;
+
+async function addFingerprint(userId, hash) {
+  const count = await countFingerprints(userId);
+  if (count >= MAX_FINGERPRINTS_PER_USER) return 'limit';
+  const result = await pool.query(
+    `INSERT INTO content_fingerprints (user_id, hash) VALUES ($1, $2)
+     ON CONFLICT (user_id, hash) DO NOTHING RETURNING id`,
+    [userId, hash]
+  );
+  return result.rows.length ? 'added' : 'duplicate';
+}
+
+async function countFingerprints(userId) {
+  const result = await pool.query(`SELECT COUNT(*)::int AS n FROM content_fingerprints WHERE user_id = $1`, [userId]);
+  return result.rows[0].n;
+}
+
+async function getFingerprintsForUser(userId) {
+  const result = await pool.query(`SELECT hash FROM content_fingerprints WHERE user_id = $1`, [userId]);
+  return result.rows.map((r) => r.hash);
+}
+
+async function clearFingerprints(userId) {
+  const result = await pool.query(`DELETE FROM content_fingerprints WHERE user_id = $1`, [userId]);
+  return result.rowCount;
+}
+
 async function getOriginalLinksForUser(userId) {
   const result = await pool.query(`SELECT url FROM original_links WHERE user_id = $1`, [userId]);
   return result.rows.map((r) => r.url);
@@ -371,7 +416,7 @@ async function leakExists(userId, url) {
   return result.rows.length > 0;
 }
 
-async function insertLeak({ userId, url, title, source, matchedAlias, snippet = null }) {
+async function insertLeak({ userId, url, title, source, matchedAlias, snippet = null, fingerprintDistance = null }) {
   // ON CONFLICT ... DO UPDATE (a harmless no-op update) instead of DO
   // NOTHING specifically so RETURNING always gives back a row — callers
   // that need the leak's id and current status (e.g. building a
@@ -379,11 +424,11 @@ async function insertLeak({ userId, url, title, source, matchedAlias, snippet = 
   // reported/removed in a previous scan rather than re-notifying it) get
   // both, whether this was a fresh insert or the leak already existed.
   const result = await pool.query(
-    `INSERT INTO leaks (user_id, url, title, source, matched_alias, snippet, status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'found')
+    `INSERT INTO leaks (user_id, url, title, source, matched_alias, snippet, fingerprint_distance, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'found')
      ON CONFLICT (user_id, url) DO UPDATE SET url = EXCLUDED.url
      RETURNING id, status`,
-    [userId, url, title, source, matchedAlias, snippet]
+    [userId, url, title, source, matchedAlias, snippet, fingerprintDistance]
   );
   return result.rows[0];
 }
@@ -552,6 +597,11 @@ module.exports = {
   leakExists,
   insertLeak,
   getLeaksFoundSince,
+  addFingerprint,
+  countFingerprints,
+  getFingerprintsForUser,
+  clearFingerprints,
+  MAX_FINGERPRINTS_PER_USER,
   getLeaksByStatus,
   getAllLeaksForUser,
   markLeakStatus,

@@ -46,6 +46,9 @@ async function searchGoogleImages(query) {
     // For images there's no snippet, so expose the host page link and
     // source name instead — the alias often appears in the page URL.
     snippet: [item.link, item.source].filter(Boolean).join(' '),
+    // Small preview image — much cheaper to download for fingerprinting
+    // than the full-size original.
+    thumbnail: item.thumbnailUrl || null,
   }));
 }
 

@@ -17,6 +17,14 @@ const MAJOR_PLATFORM_REPORT_LINKS = {
   'x.com': 'https://help.x.com/forms/dmca',
   'twitter.com': 'https://help.x.com/forms/dmca',
   'reddit.com': 'https://www.reddit.com/report/copyright',
+  // Reddit's media/short-link domains (i.redd.it, preview.redd.it, ...) —
+  // images posted to Reddit live here, not on reddit.com, so without these
+  // they were treated as ordinary sites and a notice went to Reddit's
+  // hosting abuse address instead of using Reddit's own copyright form.
+  'redd.it': 'https://www.reddit.com/report/copyright',
+  'redditmedia.com': 'https://www.reddit.com/report/copyright',
+  'redditstatic.com': 'https://www.reddit.com/report/copyright',
+  'reddituploads.com': 'https://www.reddit.com/report/copyright',
   'pinterest.com': 'https://policy.pinterest.com/en/copyright-infringement-form',
   'tumblr.com': 'https://www.tumblr.com/dmca',
   'linkedin.com': 'https://www.linkedin.com/help/linkedin/ask/TSO-DMCA',

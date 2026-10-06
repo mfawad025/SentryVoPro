@@ -216,6 +216,16 @@ async function attemptTakedownNotice(leak, user, originalLinks) {
   }
   if (hostingOrg) await db.setLeakHostingProvider(leak.id, hostingOrg);
 
+  // Safety net: if the resolved hosting provider or abuse contact turns out
+  // to be Reddit, never email it — Reddit only accepts copyright reports
+  // through its own form, so route this to manual review instead.
+  const looksLikeReddit =
+    /reddit/i.test(hostingOrg || '') ||
+    targetEmails.some((e) => /@([a-z0-9-]+\.)*(reddit|redditinc)\.com$/i.test(e));
+  if (looksLikeReddit) {
+    return { sent: false, reason: 'major_platform' };
+  }
+
   // Step 4: guessed fallback.
   if (!targetEmails.length) {
     const guessed = guessAbuseEmail(leak.url);

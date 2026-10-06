@@ -37,7 +37,7 @@ const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform } = require('./constants');
 
 // Fixed leak-related terms searched alongside every alias. Kept deliberately
 // short (2 terms) — combined with up to 2 platform-specific queries below,
-// that's 3-4 total queries per alias, each going deeper (see num:60 in
+// that's 3-4 total queries per alias, each going deeper (see num in
 // googleSearch.js) rather than running many shallow query variations.
 const LEAK_TERMS = ['leaked', 'nude'];
 
@@ -55,6 +55,28 @@ function buildTextQueries(alias, platforms) {
     queries.push(`"${alias}" ${platform}`);
   });
   return queries;
+}
+
+/**
+ * Relevance check: does this search result actually mention the client's
+ * alias? Google returns pages that match only PART of a query (e.g. just
+ * "asmr" or just "leaked"), so without this every unrelated creator's page
+ * became a "leak" — and then received a DMCA notice. Comparison ignores
+ * case, spaces, punctuation and accents, so alias "jaxi asmr" matches a
+ * title "Jaxi ASMR", a URL ".../jaxi-asmr/..." or a snippet "jaxiasmr".
+ * The full alias must appear — a match on only one word is not enough.
+ */
+function normalizeForMatch(str) {
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function matchesAlias(alias, ...fields) {
+  const needle = normalizeForMatch(alias);
+  if (!needle) return false;
+  return normalizeForMatch(fields.join(' ')).includes(needle);
 }
 
 function buildImageQueries(alias) {
@@ -375,6 +397,7 @@ async function runDailyScanForUser(user) {
   // instead of just quietly returning fewer leaks than expected.
   let queriesRun = 0;
   let queriesFailed = 0;
+  let irrelevantSkipped = 0;
   const failureReasons = [];
 
   for (const alias of aliases) {
@@ -385,6 +408,10 @@ async function runDailyScanForUser(user) {
         const results = await searchGoogle(query);
         for (const result of results) {
           if (isOwnContent(result.url, originalLinks)) continue;
+          if (!matchesAlias(alias, result.url, result.title, result.snippet)) {
+            irrelevantSkipped++;
+            continue;
+          }
           if (!(await db.leakExists(user.id, result.url))) {
             await db.insertLeak({
               userId: user.id,
@@ -392,6 +419,7 @@ async function runDailyScanForUser(user) {
               title: result.title,
               source: 'serper_web',
               matchedAlias: alias,
+              snippet: result.snippet,
             });
           }
         }
@@ -409,6 +437,10 @@ async function runDailyScanForUser(user) {
         const results = await searchGoogleImages(query);
         for (const result of results) {
           if (isOwnContent(result.url, originalLinks)) continue;
+          if (!matchesAlias(alias, result.url, result.title, result.snippet)) {
+            irrelevantSkipped++;
+            continue;
+          }
           if (!(await db.leakExists(user.id, result.url))) {
             await db.insertLeak({
               userId: user.id,
@@ -416,6 +448,7 @@ async function runDailyScanForUser(user) {
               title: result.title,
               source: 'serper_image',
               matchedAlias: alias,
+              snippet: result.snippet,
             });
           }
         }
@@ -446,7 +479,23 @@ async function runDailyScanForUser(user) {
   // manual review instead of any automated attempt (see the comment on
   // attemptTakedownNotice for why); unknown generic sites still go through
   // the original per-leak flow.
-  const newlyFound = await db.getLeaksByStatus(user.id, 'found');
+  // Re-check everything still waiting for a takedown against the same
+  // relevance rule — this clears out unrelated results saved by older
+  // scans (before the filter existed) so no notice is sent for them.
+  const pendingLeaks = await db.getLeaksByStatus(user.id, 'found');
+  const newlyFound = [];
+  for (const leak of pendingLeaks) {
+    if (leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title, leak.snippet)) {
+      await db.markLeakStatus(leak.id, 'dismissed');
+      irrelevantSkipped++;
+    } else {
+      newlyFound.push(leak);
+    }
+  }
+  if (irrelevantSkipped > 0) {
+    console.log(`Scan for ${user.email}: dismissed ${irrelevantSkipped} result(s) that did not mention the alias`);
+  }
+
   const byDomain = new Map();
   for (const leak of newlyFound) {
     let domain;

@@ -29,6 +29,9 @@ async function searchGoogle(query) {
   return organic.map((item) => ({
     url: item.link,
     title: item.title,
+    // Google's result snippet — used by scanner.js to verify the result
+    // actually mentions the client's alias (see matchesAlias).
+    snippet: item.snippet || '',
   }));
 }
 
@@ -40,6 +43,9 @@ async function searchGoogleImages(query) {
     // across versions of their API — check both to stay resilient.
     url: item.imageUrl || item.link,
     title: item.title,
+    // For images there's no snippet, so expose the host page link and
+    // source name instead — the alias often appears in the page URL.
+    snippet: [item.link, item.source].filter(Boolean).join(' '),
   }));
 }
 

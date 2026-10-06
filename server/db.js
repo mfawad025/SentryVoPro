@@ -106,6 +106,11 @@ async function initSchema() {
     -- single day forever. NULL means "not yet surfaced to the admin."
     ALTER TABLE leaks ADD COLUMN IF NOT EXISTS admin_digest_sent_at TIMESTAMPTZ;
 
+    -- Google's result snippet, kept so a leak can be re-checked for alias
+    -- relevance later. Leaks that fail that check get status 'dismissed'
+    -- and are excluded from reports, dashboards and takedown notices.
+    ALTER TABLE leaks ADD COLUMN IF NOT EXISTS snippet TEXT;
+
     CREATE TABLE IF NOT EXISTS reports_sent (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -366,7 +371,7 @@ async function leakExists(userId, url) {
   return result.rows.length > 0;
 }
 
-async function insertLeak({ userId, url, title, source, matchedAlias }) {
+async function insertLeak({ userId, url, title, source, matchedAlias, snippet = null }) {
   // ON CONFLICT ... DO UPDATE (a harmless no-op update) instead of DO
   // NOTHING specifically so RETURNING always gives back a row — callers
   // that need the leak's id and current status (e.g. building a
@@ -374,18 +379,18 @@ async function insertLeak({ userId, url, title, source, matchedAlias }) {
   // reported/removed in a previous scan rather than re-notifying it) get
   // both, whether this was a fresh insert or the leak already existed.
   const result = await pool.query(
-    `INSERT INTO leaks (user_id, url, title, source, matched_alias, status)
-     VALUES ($1, $2, $3, $4, $5, 'found')
+    `INSERT INTO leaks (user_id, url, title, source, matched_alias, snippet, status)
+     VALUES ($1, $2, $3, $4, $5, $6, 'found')
      ON CONFLICT (user_id, url) DO UPDATE SET url = EXCLUDED.url
      RETURNING id, status`,
-    [userId, url, title, source, matchedAlias]
+    [userId, url, title, source, matchedAlias, snippet]
   );
   return result.rows[0];
 }
 
 async function getLeaksFoundSince(userId, isoTimestamp) {
   const result = await pool.query(
-    `SELECT * FROM leaks WHERE user_id = $1 AND found_at >= $2 ORDER BY found_at DESC`,
+    `SELECT * FROM leaks WHERE user_id = $1 AND found_at >= $2 AND status <> 'dismissed' ORDER BY found_at DESC`,
     [userId, isoTimestamp]
   );
   return result.rows;
@@ -398,7 +403,7 @@ async function getLeaksByStatus(userId, status) {
 
 async function getAllLeaksForUser(userId, { limit = 100, offset = 0 } = {}) {
   const result = await pool.query(
-    `SELECT * FROM leaks WHERE user_id = $1 ORDER BY found_at DESC LIMIT $2 OFFSET $3`,
+    `SELECT * FROM leaks WHERE user_id = $1 AND status <> 'dismissed' ORDER BY found_at DESC LIMIT $2 OFFSET $3`,
     [userId, limit, offset]
   );
   return result.rows;
@@ -425,7 +430,7 @@ async function getLeakSummary(userId) {
        SUM(CASE WHEN status = 'found' THEN 1 ELSE 0 END) AS found,
        SUM(CASE WHEN status = 'reported' THEN 1 ELSE 0 END) AS reported,
        SUM(CASE WHEN status = 'removed' THEN 1 ELSE 0 END) AS removed
-     FROM leaks WHERE user_id = $1`,
+     FROM leaks WHERE user_id = $1 AND status <> 'dismissed'`,
     [userId]
   );
   const row = result.rows[0];
@@ -457,6 +462,7 @@ async function getPendingAdminDigestLeaks() {
     FROM leaks
     JOIN users ON users.id = leaks.user_id
     WHERE leaks.admin_digest_sent_at IS NULL
+      AND leaks.status <> 'dismissed'
       AND (leaks.status = 'manual_review' OR leaks.source = 'serper_image')
     ORDER BY leaks.found_at ASC
   `);

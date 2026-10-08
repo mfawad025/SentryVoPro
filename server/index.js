@@ -732,6 +732,70 @@ function checkAdminKey(req, res) {
   return true;
 }
 
+// Usage: https://api.sentryvo.com/api/admin/google-delist?userId=ID&key=YOUR_ADMIN_KEY
+//   optional: &all=yes  include links already marked as submitted to Google
+//
+// Returns the client's leak PAGE links that still need a Google removal
+// (delisting) request — not removed, not dismissed, and not already exported.
+// Paste them into Google's DMCA form (see formUrl). After submitting, call
+// POST /api/admin/google-delist/mark with { userId, leakIds } so the next
+// export only contains new links.
+app.get('/api/admin/google-delist', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const { googleDelistUrl, GOOGLE_DMCA_FORM_URL } = require('./constants');
+    const userId = Number(req.query.userId);
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const user = await db.getUserById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const leaks = await db.getLeaksForGoogleDelist(userId, { includeSubmitted: req.query.all === 'yes' });
+    const seen = new Set();
+    const items = [];
+    for (const leak of leaks) {
+      const url = googleDelistUrl(leak);
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      items.push({ leakId: leak.id, url });
+    }
+    // One page can carry several leaks (an album page + its images) —
+    // report every leak id behind a page so marking one marks them all.
+    const idsByUrl = new Map();
+    for (const leak of leaks) {
+      const url = googleDelistUrl(leak);
+      if (!url) continue;
+      if (!idsByUrl.has(url)) idsByUrl.set(url, []);
+      idsByUrl.get(url).push(leak.id);
+    }
+    res.json({
+      ok: true,
+      client: { id: user.id, name: user.name, email: user.email },
+      formUrl: GOOGLE_DMCA_FORM_URL,
+      count: items.length,
+      urls: items.map((i) => i.url),
+      leakIds: Array.from(idsByUrl.values()).flat(),
+    });
+  } catch (err) {
+    console.error('Google delist export error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Body: { userId, leakIds: [1,2,3] } — marks those leaks as submitted to Google.
+app.post('/api/admin/google-delist/mark', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const userId = Number(req.body?.userId);
+    const ids = (Array.isArray(req.body?.leakIds) ? req.body.leakIds : []).map(Number).filter(Number.isInteger);
+    if (!userId || !ids.length) return res.status(400).json({ error: 'userId and leakIds are required' });
+    const marked = await db.markGoogleSubmitted(userId, ids);
+    res.json({ ok: true, marked });
+  } catch (err) {
+    console.error('Google delist mark error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Usage: https://api.sentryvo.com/api/admin/fingerprint/count?userId=ID&key=YOUR_ADMIN_KEY
 app.get('/api/admin/fingerprint/count', async (req, res) => {
   if (!checkAdminKey(req, res)) return;

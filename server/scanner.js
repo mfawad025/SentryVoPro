@@ -46,15 +46,66 @@ const LEAK_TERMS = ['leaked', 'nude'];
 // total per alias never exceeds LEAK_TERMS.length + MAX_PLATFORM_QUERIES.
 const MAX_PLATFORM_QUERIES = 2;
 
-function buildTextQueries(alias, platforms) {
+// Telegram channels/posts indexed by Google live under t.me.
+const TELEGRAM_SITE = 't.me';
+
+// Known leak sites are searched in groups of this many domains per query
+// (one OR-query per group), and only LEAK_SITE_GROUPS_PER_SCAN groups run per
+// scan, rotating daily so the whole list is covered over a few days without
+// multiplying Serper cost. Raise the env var for more coverage per day.
+const LEAK_SITES_PER_QUERY = 8;
+const MAX_LEAK_SITES = 64;
+const LEAK_SITE_GROUPS_PER_SCAN = Math.max(0, Number(process.env.LEAK_SITE_GROUPS_PER_SCAN ?? 2));
+
+let leakSiteCache = { at: 0, groups: [] };
+
+/**
+ * The leak sites to target, as arrays of domains: those that have produced
+ * the most leaks across all clients first, then every site in the verified
+ * contact list. Cached for an hour — it is the same for every client.
+ */
+async function getLeakSiteGroups() {
+  if (Date.now() - leakSiteCache.at < 60 * 60 * 1000) return leakSiteCache.groups;
+  let domains = [];
+  try {
+    domains = await db.getLeakSiteDomains(MAX_LEAK_SITES * 2);
+  } catch (err) {
+    console.warn('Could not load leak-site list:', err.message);
+  }
+  const valid = domains
+    .filter((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d))
+    .filter((d) => !isMajorPlatform(`https://${d}`))
+    .slice(0, MAX_LEAK_SITES);
+  const groups = [];
+  for (let i = 0; i < valid.length; i += LEAK_SITES_PER_QUERY) groups.push(valid.slice(i, i + LEAK_SITES_PER_QUERY));
+  leakSiteCache = { at: Date.now(), groups };
+  return groups;
+}
+
+// Today's slice of the rotating leak-site groups.
+function pickSiteGroupsForToday(siteGroups) {
+  if (!siteGroups.length || !LEAK_SITE_GROUPS_PER_SCAN) return [];
+  const count = Math.min(LEAK_SITE_GROUPS_PER_SCAN, siteGroups.length);
+  const dayIndex = Math.floor(Date.now() / 86400000);
+  const start = (dayIndex * count) % siteGroups.length;
+  return Array.from({ length: count }, (_, i) => siteGroups[(start + i) % siteGroups.length]);
+}
+
+function buildTextQueries(alias, platforms, siteGroups = []) {
   const queries = LEAK_TERMS.map((term) => `"${alias}" ${term}`);
   // Only the platform(s) this specific client actually works on — e.g.
   // "kitsykat onlyfans" if she's on OnlyFans, skipped entirely if she isn't
   // on any listed platform. Capped at 2 so a client with many platforms
-  // doesn't blow past the 3-4 query target.
+  // doesn't blow past the query target.
   platforms.slice(0, MAX_PLATFORM_QUERIES).forEach((platform) => {
     queries.push(`"${alias}" ${platform}`);
   });
+  // Telegram.
+  queries.push(`"${alias}" site:${TELEGRAM_SITE}`);
+  // Known leak sites (today's rotating slice).
+  for (const group of pickSiteGroupsForToday(siteGroups)) {
+    queries.push(`"${alias}" (${group.map((d) => `site:${d}`).join(' OR ')})`);
+  }
   return queries;
 }
 
@@ -84,6 +135,9 @@ function matchesAlias(alias, ...fields) {
 // per scan (keeps scan time and bandwidth bounded), in small parallel batches.
 const MAX_IMAGE_DOWNLOADS_PER_SCAN = 150;
 const FINGERPRINT_BATCH = 5;
+// Result pages (not images) opened per client per scan to look at their
+// preview images — each costs one page download plus up to 3 image downloads.
+const MAX_PAGE_CHECKS_PER_SCAN = 40;
 
 function buildImageQueries(alias) {
   return [`"${alias}" leaked photos`];
@@ -423,20 +477,23 @@ async function runDailyScanForUser(user) {
   // alias-based scan.
   const fingerprints = await db.getFingerprintsForUser(user.id);
   let fingerprintBudget = MAX_IMAGE_DOWNLOADS_PER_SCAN;
+  let pageCheckBudget = MAX_PAGE_CHECKS_PER_SCAN;
+  const siteGroups = await getLeakSiteGroups();
 
   for (const alias of aliases) {
-    // Text search: leak-site mentions, forum posts, social platform posts
-    for (const query of buildTextQueries(alias, platforms)) {
+    // Text search: leak-site mentions, forum posts, social platform posts,
+    // Telegram, and a rotating slice of known leak sites.
+    for (const query of buildTextQueries(alias, platforms, siteGroups)) {
       queriesRun++;
       try {
         const results = await searchGoogle(query);
+        const rescueCandidates = [];
+
         for (const result of results) {
           if (isOwnContent(result.url, originalLinks)) continue;
-          if (!matchesAlias(alias, result.url, result.title, result.snippet)) {
-            irrelevantSkipped++;
-            continue;
-          }
-          if (!(await db.leakExists(user.id, result.url))) {
+          if (await db.leakExists(user.id, result.url)) continue;
+
+          if (matchesAlias(alias, result.url, result.title, result.snippet)) {
             await db.insertLeak({
               userId: user.id,
               url: result.url,
@@ -445,6 +502,52 @@ async function runDailyScanForUser(user) {
               matchedAlias: alias,
               snippet: result.snippet,
             });
+          } else if (fingerprints.length) {
+            rescueCandidates.push(result);
+          } else {
+            irrelevantSkipped++;
+          }
+        }
+
+        // Rescue pass: a page that doesn't mention the alias in its text may
+        // still be hosting the client's photos. Look at the page's own
+        // preview images and keep it only if one matches a fingerprint.
+        // Pages that were checked and didn't match are recorded as
+        // 'dismissed' so later scans don't download them again.
+        for (let i = 0; i < rescueCandidates.length && pageCheckBudget > 0; i += FINGERPRINT_BATCH) {
+          const batch = rescueCandidates.slice(i, i + FINGERPRINT_BATCH).slice(0, pageCheckBudget);
+          pageCheckBudget -= batch.length;
+          const hashSets = await Promise.all(batch.map((r) => fingerprint.hashPageImages(r.url)));
+          for (let j = 0; j < batch.length; j++) {
+            const result = batch[j];
+            let distance = null;
+            for (const h of hashSets[j]) {
+              const d = fingerprint.bestMatch(h, fingerprints);
+              if (d !== null && (distance === null || d < distance)) distance = d;
+            }
+            if (distance !== null) {
+              fingerprintMatches++;
+              await db.insertLeak({
+                userId: user.id,
+                url: result.url,
+                title: `[Verified match] ${result.title || result.url}`,
+                source: 'serper_web',
+                matchedAlias: alias,
+                snippet: result.snippet,
+                fingerprintDistance: distance,
+              });
+            } else {
+              const row = await db.insertLeak({
+                userId: user.id,
+                url: result.url,
+                title: result.title,
+                source: 'serper_web',
+                matchedAlias: alias,
+                snippet: result.snippet,
+              });
+              await db.markLeakStatus(row.id, 'dismissed');
+              irrelevantSkipped++;
+            }
           }
         }
       } catch (err) {

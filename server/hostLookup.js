@@ -15,6 +15,7 @@
  */
 const dns = require('dns').promises;
 const fetch = require('node-fetch');
+const { safeAgentFor } = require('./fingerprint');
 
 function extractAbuseEmails(rdapJson) {
   const emails = new Set();
@@ -122,7 +123,7 @@ async function lookupHostingAndAbuseContacts(url) {
  */
 async function findSiteContactEmail(url) {
   try {
-    const res = await fetch(url, { timeout: 8000 });
+    const res = await fetch(url, { timeout: 8000, agent: safeAgentFor(url) });
     if (!res.ok) return null;
     const html = await res.text();
 
@@ -162,7 +163,7 @@ async function findSiteContactEmail(url) {
  */
 async function extractMediaLinksFromPage(pageUrl) {
   try {
-    const res = await fetch(pageUrl, { timeout: 10000 });
+    const res = await fetch(pageUrl, { timeout: 10000, agent: safeAgentFor(pageUrl) });
     if (!res.ok) return [];
     const html = await res.text();
     const base = new URL(pageUrl);

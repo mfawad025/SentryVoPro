@@ -73,7 +73,24 @@ function getMajorPlatformReportLink(url) {
   }
 }
 
+// The page URL to give Google's removal form for a leak. Google delists
+// PAGES from its search results. Image-search leaks are stored by image
+// file URL, but their snippet begins with the page that hosts the image, so
+// use that when present.
+function googleDelistUrl(leak) {
+  const isHttp = (u) => /^https?:\/\//i.test(u || '');
+  if (leak.source === 'serper_image') {
+    const first = String(leak.snippet || '').trim().split(/\s+/)[0];
+    if (isHttp(first)) return first;
+  }
+  return isHttp(leak.url) ? leak.url : null;
+}
+
+const GOOGLE_DMCA_FORM_URL = 'https://reportcontent.google.com/forms/dmca_search';
+
 module.exports = {
+  googleDelistUrl,
+  GOOGLE_DMCA_FORM_URL,
   GOOGLE_REMOVAL_TOOL_URL,
   MAJOR_PLATFORM_DOMAINS,
   MAJOR_PLATFORM_REPORT_LINKS,

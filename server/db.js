@@ -117,6 +117,10 @@ async function initSchema() {
     -- they are exempt from the alias-in-text relevance check.
     ALTER TABLE leaks ADD COLUMN IF NOT EXISTS fingerprint_distance INTEGER;
 
+    -- When this leak's page was exported and submitted to Google's removal
+    -- (delisting) form, so the next export only contains new links.
+    ALTER TABLE leaks ADD COLUMN IF NOT EXISTS google_submitted_at TIMESTAMPTZ;
+
     -- Perceptual hashes of a client's ORIGINAL photos (never the images
     -- themselves). Used to recognise re-uploads of the same photo.
     CREATE TABLE IF NOT EXISTS content_fingerprints (
@@ -325,6 +329,32 @@ async function deleteSiteContactEmail(domain) {
   await pool.query(`DELETE FROM site_contact_emails WHERE domain = $1`, [domain]);
 }
 
+// Leak-site domains worth targeting with site: queries — the ones that have
+// produced the most (non-dismissed) leaks across all clients first, then
+// every domain in the verified contact list. Returns plain lowercase domains.
+async function getLeakSiteDomains(limit = 100) {
+  const seen = new Map();
+  const fromLeaks = await pool.query(
+    `SELECT d AS domain, COUNT(*)::int AS n
+     FROM (
+       SELECT lower(regexp_replace(substring(url from '^https?://([^/:?#]+)'), '^www[.]', '')) AS d
+       FROM leaks WHERE status <> 'dismissed'
+     ) t
+     WHERE d IS NOT NULL
+     GROUP BY d ORDER BY n DESC LIMIT $1`,
+    [limit]
+  );
+  fromLeaks.rows.forEach((r) => r.domain && seen.set(r.domain, r.n));
+  const fromContacts = await pool.query(`SELECT lower(domain) AS domain FROM site_contact_emails`);
+  fromContacts.rows.forEach((r) => {
+    if (r.domain && !seen.has(r.domain)) seen.set(r.domain, 0);
+  });
+  return Array.from(seen.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([domain]) => domain)
+    .slice(0, limit);
+}
+
 async function listSiteContactEmails() {
   const result = await pool.query(`SELECT * FROM site_contact_emails ORDER BY domain ASC`);
   return result.rows;
@@ -452,6 +482,28 @@ async function getAllLeaksForUser(userId, { limit = 100, offset = 0 } = {}) {
     [userId, limit, offset]
   );
   return result.rows;
+}
+
+// Leaks still worth asking Google to delist: not removed, not dismissed, and
+// (unless includeSubmitted) not already exported for Google.
+async function getLeaksForGoogleDelist(userId, { includeSubmitted = false } = {}) {
+  const result = await pool.query(
+    `SELECT id, url, title, source, snippet, found_at FROM leaks
+     WHERE user_id = $1 AND status NOT IN ('removed', 'dismissed')
+       AND ($2::boolean OR google_submitted_at IS NULL)
+     ORDER BY found_at ASC`,
+    [userId, includeSubmitted]
+  );
+  return result.rows;
+}
+
+async function markGoogleSubmitted(userId, leakIds) {
+  if (!leakIds.length) return 0;
+  const result = await pool.query(
+    `UPDATE leaks SET google_submitted_at = NOW() WHERE user_id = $1 AND id = ANY($2::int[])`,
+    [userId, leakIds]
+  );
+  return result.rowCount;
 }
 
 async function markLeakStatus(id, status) {
@@ -589,6 +641,7 @@ module.exports = {
   upsertSiteContactEmail,
   deleteSiteContactEmail,
   listSiteContactEmails,
+  getLeakSiteDomains,
   addAliases,
   replaceAliases,
   getAliasesForUser,
@@ -605,6 +658,8 @@ module.exports = {
   getLeaksByStatus,
   getAllLeaksForUser,
   markLeakStatus,
+  getLeaksForGoogleDelist,
+  markGoogleSubmitted,
   setLeakHostingProvider,
   getLeakSummary,
   logReportSent,

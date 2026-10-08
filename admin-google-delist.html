@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Delisting List — SentryVo Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section style="padding:60px 0;">
+  <div class="wrap" style="max-width:680px;">
+    <div style="background:var(--ink-2); border:1px solid var(--line); border-radius:16px; padding:40px;">
+      <span class="eyebrow">Admin Only — Not Linked From Site Navigation</span>
+      <h2 style="margin:8px 0 6px;">Google delisting list</h2>
+      <p style="font-size:.88rem; color:var(--text-low); margin-bottom:28px;">
+        Gets a client's leak pages that still need a Google removal request, ready to paste into
+        Google's DMCA form. Removing a page from Google search results cuts the traffic a leak
+        site gets, even before the site itself takes it down. Links already submitted, removed or
+        dismissed are left out. Submit each batch on Google's form, then mark it submitted so
+        the next export contains only new links.
+      </p>
+
+      <div class="field">
+        <label for="admin-key">Admin key</label>
+        <input type="password" id="admin-key" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="search-term">Find client by alias or email</label>
+        <input type="text" id="search-term" placeholder="e.g. kitsykat or client@email.com">
+      </div>
+      <button type="button" class="btn btn-block" id="search-submit">Find Client &amp; Load Links</button>
+      <p class="confirm-note" id="search-status" style="min-height:1.2em; font-size:.82rem; margin-top:12px; text-align:center;"></p>
+
+      <div id="results-panel" style="display:none; margin-top:28px; padding-top:28px; border-top:1px solid var(--line);">
+        <p style="font-size:.9rem; margin-bottom:6px;">Client: <strong id="client-label"></strong></p>
+        <p style="font-size:.82rem; color:var(--text-low); margin-bottom:16px;">
+          Links to submit: <strong id="link-count">0</strong> — in batches of 100.
+          <a id="google-form-link" href="#" target="_blank" rel="noopener" style="color:var(--rust);">Open Google's DMCA form</a>
+        </p>
+        <div id="batches"></div>
+        <button type="button" class="btn btn-primary btn-block" id="mark-submitted" style="margin-top:18px;">I've submitted all of these to Google</button>
+        <p class="confirm-note" id="mark-status" style="min-height:1.2em; font-size:.82rem; margin-top:12px; text-align:center;"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="script.js"></script>
+<script>
+  let current = null; // { userId, leakIds }
+  const keyOf = () => document.getElementById('admin-key').value.trim();
+  const BATCH = 100;
+
+  function renderBatches(urls) {
+    const wrap = document.getElementById('batches');
+    wrap.innerHTML = '';
+    for (let i = 0; i < urls.length; i += BATCH) {
+      const chunk = urls.slice(i, i + BATCH);
+      const box = document.createElement('div');
+      box.style.marginBottom = '16px';
+      const label = document.createElement('label');
+      label.textContent = `Batch ${i / BATCH + 1} (${chunk.length} links)`;
+      const ta = document.createElement('textarea');
+      ta.rows = 5;
+      ta.readOnly = true;
+      ta.value = chunk.join('\n');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-block';
+      btn.style.marginTop = '8px';
+      btn.textContent = 'Copy this batch';
+      btn.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(ta.value); btn.textContent = 'Copied'; }
+        catch (_) { ta.select(); document.execCommand('copy'); btn.textContent = 'Copied'; }
+        setTimeout(() => (btn.textContent = 'Copy this batch'), 1500);
+      });
+      box.append(label, ta, btn);
+      wrap.appendChild(box);
+    }
+  }
+
+  document.getElementById('search-submit').addEventListener('click', async function () {
+    const btn = this;
+    const statusEl = document.getElementById('search-status');
+    const term = document.getElementById('search-term').value.trim();
+    if (!keyOf() || !term) {
+      statusEl.textContent = 'Enter the admin key and a search term first.';
+      statusEl.style.color = '#0096F5';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    statusEl.textContent = '';
+    document.getElementById('results-panel').style.display = 'none';
+    document.getElementById('mark-status').textContent = '';
+    try {
+      const f = await fetch(`${SENTRYVO_BACKEND_URL}/api/admin/find-user?q=${encodeURIComponent(term)}&key=${encodeURIComponent(keyOf())}`);
+      const fd = await f.json().catch(() => ({}));
+      if (!f.ok) throw new Error(fd.error || 'Search failed');
+      if (!fd.count) throw new Error('No client found matching that alias/email.');
+      if (fd.count > 1) throw new Error(`Found ${fd.count} matching clients — search something more specific (e.g. their exact email).`);
+
+      const userId = fd.users[0].id;
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/admin/google-delist?userId=${userId}&key=${encodeURIComponent(keyOf())}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not load links');
+
+      current = { userId, leakIds: data.leakIds || [] };
+      document.getElementById('client-label').textContent = `${data.client.name} (${data.client.email})`;
+      document.getElementById('link-count').textContent = data.count;
+      document.getElementById('google-form-link').href = data.formUrl;
+      renderBatches(data.urls);
+      document.getElementById('mark-submitted').style.display = data.count ? 'block' : 'none';
+      document.getElementById('results-panel').style.display = 'block';
+      statusEl.textContent = data.count ? 'Links loaded.' : 'Nothing new to submit for this client.';
+      statusEl.style.color = 'var(--sage)';
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Find Client & Load Links';
+    }
+  });
+
+  document.getElementById('mark-submitted').addEventListener('click', async function () {
+    const btn = this;
+    const statusEl = document.getElementById('mark-status');
+    if (!current || !current.leakIds.length) return;
+    if (!confirm('Only confirm if you have already submitted every batch on Google. Mark them as submitted?')) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/admin/google-delist/mark?key=${encodeURIComponent(keyOf())}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(current),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not mark as submitted');
+      statusEl.textContent = `Marked ${data.marked} link(s) as submitted — the next export will only show new ones.`;
+      statusEl.style.color = 'var(--sage)';
+      document.getElementById('batches').innerHTML = '';
+      btn.style.display = 'none';
+      current = null;
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = '#0096F5';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

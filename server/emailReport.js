@@ -99,6 +99,9 @@ async function sendDailyReportEmail(user, newLeaks, summary) {
   await mailer.sendMail({
     from: process.env.REPORT_FROM_EMAIL,
     to: user.email,
+    // Admin-added (Fiverr) clients: the admin gets a copy of every report,
+    // so the link details are never missed if the client's inbox hides it.
+    bcc: user.source === 'fiverr' ? (process.env.ADMIN_DIGEST_EMAIL || process.env.SMTP_USER || undefined) : undefined,
     subject: `SentryVo Daily Report — ${newLeaks.length} new item(s)`,
     html,
     attachments,

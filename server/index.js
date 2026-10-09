@@ -1189,6 +1189,38 @@ app.get('/api/admin/send-digest-now', async (req, res) => {
   }
 });
 
+// ---------------- Admin: send a client's full report right now ----------------
+// GET /api/admin/send-report?key=ADMIN_KEY&email=client@example.com[&scan=1]
+// Emails the client (admin gets a copy for admin-added clients) a report with
+// every link found so far. With scan=1 it runs a fresh scan for that client
+// first. Returns the exact error if the email can't be sent.
+app.get('/api/admin/send-report', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const user = await db.getUserByEmail(String(req.query.email || '').trim());
+    if (!user) return res.status(404).json({ error: 'No client with that email' });
+    if (user.status !== 'active') return res.status(400).json({ error: `Client status is "${user.status}", not active` });
+
+    let scanResult = null;
+    if (req.query.scan === '1') {
+      const { runDailyScanForUser } = require('./scanner');
+      scanResult = await runDailyScanForUser(user);
+      if (scanResult.reportSent) return res.json({ ok: true, message: 'Scanned and report sent', scanResult });
+    }
+
+    const leaks = (await db.getAllLeaksForUser(user.id, { limit: 2000, offset: 0 })).filter((l) => l.status !== 'dismissed');
+    const summary = await db.getLeakSummary(user.id);
+    const { sendDailyReportEmail } = require('./emailReport');
+    await sendDailyReportEmail(user, leaks, summary);
+    await db.logReportSent(user.id, leaks.length);
+    await db.markReportSentNow(user.id);
+    res.json({ ok: true, message: `Report with ${leaks.length} link(s) sent to ${user.email}`, scanResult });
+  } catch (err) {
+    console.error('Admin send-report error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------- Admin: add a client directly (e.g. a Fiverr client) ----------------
 // Usage: POST https://api.sentryvo.com/api/admin/add-client?key=YOUR_ADMIN_KEY
 // Body: { name, email, mobile, plan, platforms, aliases, originalLinks }

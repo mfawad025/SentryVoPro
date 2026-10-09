@@ -61,6 +61,8 @@ async function initSchema() {
     -- Purely for the admin's own reference — doesn't change how the
     -- account behaves once active.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'direct';
+    -- Admin-added (Fiverr) clients always get a report every day.
+    UPDATE users SET report_frequency_days = 1 WHERE source = 'fiverr' AND report_frequency_days <> 1;
     -- Lemon Squeezy's own "manage your subscription" portal link — captured
     -- from the webhook payload when present (subscription events include
     -- data.attributes.urls.customer_portal). Powers the dashboard's Billing
@@ -218,7 +220,7 @@ async function countAgencyMembers(agencyId) {
 
 // ---------- Users ----------
 async function createUser({ name, email, mobile, passwordHash, plan, platforms, checkoutRef, agencyId = null, role = 'individual', source = 'direct', status = null }) {
-  const reportFrequencyDays = plan === 'multi' ? 1 : 3;
+  const reportFrequencyDays = plan === 'multi' || source === 'fiverr' ? 1 : 3;
   // Explicit status wins if given (used for admin-added Fiverr clients, who
   // are active immediately with no Lemon Squeezy checkout at all) —
   // otherwise falls back to the existing rule: agency members are active
@@ -267,7 +269,10 @@ async function markReportSentNow(userId) {
 function isReportDue(user) {
   if (!user.last_report_at) return true;
   const last = new Date(user.last_report_at).getTime();
-  const dueAt = last + user.report_frequency_days * 24 * 60 * 60 * 1000;
+  // 2-hour grace: the previous report is stamped when that day's scan
+  // FINISHES, so without it a daily report would be skipped whenever
+  // today's scan starts slightly earlier than yesterday's ended.
+  const dueAt = last + user.report_frequency_days * 24 * 60 * 60 * 1000 - 2 * 60 * 60 * 1000;
   return Date.now() >= dueAt;
 }
 

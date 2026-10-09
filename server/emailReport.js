@@ -77,9 +77,9 @@ async function sendDailyReportEmail(user, newLeaks, summary) {
   const html = buildReportHtml(user, newLeaks, summary);
 
   if (!mailer) {
-    console.log(`[email disabled — SMTP not configured] Would have emailed ${user.email}:`);
-    console.log(`  New leaks: ${newLeaks.length}, summary:`, summary);
-    return;
+    // Fail loudly: silently "succeeding" here made reports look sent (and
+    // were marked as sent) when no email had gone out at all.
+    throw new Error('SMTP is not configured (SMTP_HOST missing or still the placeholder) — no email was sent');
   }
 
   let attachments = [];
@@ -96,7 +96,7 @@ async function sendDailyReportEmail(user, newLeaks, summary) {
     console.warn('Excel report generation failed, sending email without attachment:', err.message);
   }
 
-  await mailer.sendMail({
+  const info = await mailer.sendMail({
     from: process.env.REPORT_FROM_EMAIL,
     to: user.email,
     // Admin-added (Fiverr) clients: the admin gets a copy of every report,
@@ -106,6 +106,16 @@ async function sendDailyReportEmail(user, newLeaks, summary) {
     html,
     attachments,
   });
+  const result = {
+    from: process.env.REPORT_FROM_EMAIL,
+    to: user.email,
+    bcc: user.source === 'fiverr' ? (process.env.ADMIN_DIGEST_EMAIL || process.env.SMTP_USER || null) : null,
+    accepted: info.accepted,
+    rejected: info.rejected,
+    response: info.response,
+  };
+  console.log('Report email handed to SMTP:', JSON.stringify(result));
+  return result;
 }
 
 /**

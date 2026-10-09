@@ -1211,10 +1211,10 @@ app.get('/api/admin/send-report', async (req, res) => {
     const leaks = (await db.getAllLeaksForUser(user.id, { limit: 2000, offset: 0 })).filter((l) => l.status !== 'dismissed');
     const summary = await db.getLeakSummary(user.id);
     const { sendDailyReportEmail } = require('./emailReport');
-    await sendDailyReportEmail(user, leaks, summary);
+    const mail = await sendDailyReportEmail(user, leaks, summary);
     await db.logReportSent(user.id, leaks.length);
     await db.markReportSentNow(user.id);
-    res.json({ ok: true, message: `Report with ${leaks.length} link(s) sent to ${user.email}`, scanResult });
+    res.json({ ok: true, message: `Report with ${leaks.length} link(s) handed to the mail server for ${user.email}`, mail, scanResult });
   } catch (err) {
     console.error('Admin send-report error:', err.message);
     res.status(500).json({ error: err.message });

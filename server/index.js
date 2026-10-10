@@ -1221,6 +1221,29 @@ app.get('/api/admin/send-report', async (req, res) => {
   }
 });
 
+// ---------------- Admin: inspect (and dismiss) a client's recent leaks ----------------
+// GET /api/admin/leak-debug?key=KEY&email=client@example.com[&dismiss=12,15]
+// Shows source, fingerprint distance and title for the latest leaks so you can
+// see WHY each was reported. dismiss= marks those ids 'dismissed' (excluded
+// from reports and takedowns).
+app.get('/api/admin/leak-debug', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const user = await db.getUserByEmail(String(req.query.email || '').trim());
+    if (!user) return res.status(404).json({ error: 'No client with that email' });
+    const ids = String(req.query.dismiss || '').split(',').map((x) => Number(x)).filter(Boolean);
+    const own = new Set((await db.getAllLeaksForUser(user.id, { limit: 5000, offset: 0 })).map((l) => l.id));
+    for (const id of ids) if (own.has(id)) await db.markLeakStatus(id, 'dismissed');
+    const leaks = (await db.getAllLeaksForUser(user.id, { limit: 60, offset: 0 })).map((l) => ({
+      id: l.id, status: l.status, source: l.source, alias: l.matched_alias,
+      fingerprintDistance: l.fingerprint_distance, title: l.title, url: l.url,
+    }));
+    res.json({ ok: true, dismissed: ids, leaks });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------- Admin: add a client directly (e.g. a Fiverr client) ----------------
 // Usage: POST https://api.sentryvo.com/api/admin/add-client?key=YOUR_ADMIN_KEY
 // Body: { name, email, mobile, plan, platforms, aliases, originalLinks }

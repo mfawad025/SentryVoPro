@@ -592,7 +592,14 @@ async function runDailyScanForUser(user) {
         for (let i = 0; i < fresh.length; i++) {
           const result = fresh[i];
           const distance = distances[i];
-          const textMatch = matchesAlias(alias, result.url, result.title, result.snippet);
+          // Google Images returns pictures from any page that merely mentions
+          // the keyword somewhere, so a text hit says nothing about the
+          // picture itself. When the client has fingerprints, only a photo
+          // match counts. Without fingerprints, the alias must be in the
+          // page title or URL (not just loose snippet text).
+          const textMatch = fingerprints.length
+            ? false
+            : matchesAlias(alias, result.url, result.title, '');
           if (!textMatch && distance === null) {
             irrelevantSkipped++;
             continue;

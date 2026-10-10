@@ -20,7 +20,9 @@ const fetch = require('node-fetch');
 const sharp = require('sharp');
 
 // Max differing bits (out of 64) for two images to count as the same photo.
-const MAX_DISTANCE = 8;
+// Kept strict on purpose: a false match can trigger a wrong takedown notice.
+// Override with FINGERPRINT_MAX_DISTANCE if genuine copies are being missed.
+const MAX_DISTANCE = Number(process.env.FINGERPRINT_MAX_DISTANCE || 5);
 // Skip near-uniform images (blank/solid-colour thumbnails) — their hashes
 // carry no information and would match each other.
 const MIN_PIXEL_STDDEV = 8;

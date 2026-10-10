@@ -128,7 +128,9 @@ function normalizeForMatch(str) {
 function matchesAlias(alias, ...fields) {
   const needle = normalizeForMatch(alias);
   if (!needle) return false;
-  return normalizeForMatch(fields.join(' ')).includes(needle);
+  // Each field on its own: joining them first would let the end of one field
+  // and the start of the next combine into a false match ("...jaxi" + "asmr...").
+  return fields.some((f) => normalizeForMatch(f).includes(needle));
 }
 
 // Image-fingerprint limits: at most this many images downloaded per client

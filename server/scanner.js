@@ -371,6 +371,11 @@ async function attemptConsolidatedTakedownNotice(domain, knownEmail, initialLeak
       for (const extraUrl of extraUrls) {
         if (allUrls.has(extraUrl)) continue; // already queued this run
         if (isOwnContent(extraUrl, originalLinks)) continue;
+        // A page found for this client can list MANY creators' media (a
+        // gallery index, a "related" feed). Only claim a media file if the
+        // file's own address names the client (e.g. /kitsykat/...). Media
+        // that names someone else, or no one, is left out of the notice.
+        if (!matchesAlias(leak.matched_alias, extraUrl, '', '')) continue;
         const inserted = await db.insertLeak({
           userId: user.id,
           url: extraUrl,

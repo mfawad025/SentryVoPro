@@ -133,6 +133,43 @@ function matchesAlias(alias, ...fields) {
   return fields.some((f) => normalizeForMatch(f).includes(needle));
 }
 
+
+// ---- Search-result pages and join links ----
+// A site's own search page ("/search/jaxi-asmr/", "?s=jaxi+asmr") is only a
+// list. We never report the list itself; instead we open it and take the
+// individual items whose title or address names the client. "/join/" style
+// links are signup/promo pages, not content, and are skipped.
+const MAX_SEARCH_EXPANSIONS_PER_SCAN = 15;
+const MAX_ITEMS_PER_SEARCH_PAGE = 25;
+
+function isSearchPageUrl(url) {
+  try {
+    const u = new URL(url);
+    if (/\/(search|tag|tags|category|categories|model|models|channel|channels)(\/|$)/i.test(u.pathname)) return true;
+    return ['s', 'q', 'k', 'query', 'search', 'keyword', 'keywords'].some((p) => u.searchParams.has(p));
+  } catch {
+    return false;
+  }
+}
+
+function isJoinPageUrl(url) {
+  try {
+    return /\/(join|signup|sign-up|register|subscribe|go|out|redirect)(\/|$)/i.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+function sameSite(a, b) {
+  try {
+    const clean = (x) => new URL(x).hostname.replace(/^www\./, '').toLowerCase();
+    const ha = clean(a), hb = clean(b);
+    return ha === hb || ha.endsWith('.' + hb) || hb.endsWith('.' + ha);
+  } catch {
+    return false;
+  }
+}
+
 // Image-fingerprint limits: at most this many images downloaded per client
 // per scan (keeps scan time and bandwidth bounded), in small parallel batches.
 const MAX_IMAGE_DOWNLOADS_PER_SCAN = 150;
@@ -485,6 +522,7 @@ async function runDailyScanForUser(user) {
   const fingerprints = await db.getFingerprintsForUser(user.id);
   let fingerprintBudget = MAX_IMAGE_DOWNLOADS_PER_SCAN;
   let pageCheckBudget = MAX_PAGE_CHECKS_PER_SCAN;
+  let searchExpansionBudget = MAX_SEARCH_EXPANSIONS_PER_SCAN;
   const siteGroups = await getLeakSiteGroups();
 
   for (const alias of aliases) {
@@ -499,6 +537,49 @@ async function runDailyScanForUser(user) {
         for (const result of results) {
           if (isOwnContent(result.url, originalLinks)) continue;
           if (await db.leakExists(user.id, result.url)) continue;
+
+          if (isJoinPageUrl(result.url)) {
+            irrelevantSkipped++;
+            continue;
+          }
+
+          if (isSearchPageUrl(result.url)) {
+            // Don't report the list — open it and keep only its items that
+            // name the client. The search page is recorded as dismissed so
+            // it isn't re-opened on every scan.
+            if (searchExpansionBudget > 0) {
+              searchExpansionBudget--;
+              const items = await fingerprint.fetchPageLinks(result.url);
+              let kept = 0;
+              for (const item of items) {
+                if (kept >= MAX_ITEMS_PER_SEARCH_PAGE) break;
+                if (!sameSite(item.url, result.url)) continue;
+                if (isSearchPageUrl(item.url) || isJoinPageUrl(item.url)) continue;
+                if (isOwnContent(item.url, originalLinks)) continue;
+                if (!matchesAlias(alias, item.url, item.text)) continue;
+                if (await db.leakExists(user.id, item.url)) continue;
+                await db.insertLeak({
+                  userId: user.id,
+                  url: item.url,
+                  title: item.text.slice(0, 200),
+                  source: 'search_expand',
+                  matchedAlias: alias,
+                  snippet: item.text.slice(0, 300),
+                });
+                kept++;
+              }
+              const listRow = await db.insertLeak({
+                userId: user.id,
+                url: result.url,
+                title: result.title,
+                source: 'serper_web',
+                matchedAlias: alias,
+                snippet: result.snippet,
+              });
+              await db.markLeakStatus(listRow.id, 'dismissed');
+            }
+            continue;
+          }
 
           if (matchesAlias(alias, result.url, result.title, result.snippet)) {
             await db.insertLeak({
@@ -655,7 +736,10 @@ async function runDailyScanForUser(user) {
   const pendingLeaks = await db.getLeaksByStatus(user.id, 'found');
   const newlyFound = [];
   for (const leak of pendingLeaks) {
-    if (leak.fingerprint_distance == null && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title, leak.snippet)) {
+    if (isJoinPageUrl(leak.url) || isSearchPageUrl(leak.url)) {
+      await db.markLeakStatus(leak.id, 'dismissed');
+      irrelevantSkipped++;
+    } else if (leak.fingerprint_distance == null && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title, leak.snippet)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
     } else {

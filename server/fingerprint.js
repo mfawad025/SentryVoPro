@@ -243,6 +243,42 @@ function extractPageImageUrls(html, pageUrl) {
 }
 
 /**
+ * Lists the links on a page as { url, text }, where text is the link's
+ * visible text plus any title/alt attribute (including a thumbnail's alt).
+ * Used to pull individual results out of a site's search-results page.
+ */
+function extractLinkedItems(html, pageUrl) {
+  const items = [];
+  const seen = new Set();
+  const re = /<a\b([^>]*?)href=["']([^"'#]+)["']([^>]*)>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null && items.length < 400) {
+    let abs;
+    try {
+      abs = new URL(m[2].replace(/&amp;/g, '&'), pageUrl).href;
+    } catch {
+      continue;
+    }
+    if (!/^https?:/i.test(abs) || seen.has(abs)) continue;
+    const attrs = `${m[1]} ${m[3]} ${m[4]}`;
+    const extras = [...attrs.matchAll(/(?:title|alt)=["']([^"']+)["']/gi)].map((x) => x[1]);
+    const text = [m[4].replace(/<[^>]+>/g, ' '), ...extras].join(' ').replace(/\s+/g, ' ').trim();
+    seen.add(abs);
+    items.push({ url: abs, text });
+  }
+  return items;
+}
+
+/**
+ * Fetches a page and returns its links as { url, text } (empty on any problem).
+ */
+async function fetchPageLinks(pageUrl) {
+  const page = await safeFetch(pageUrl, { typePrefix: 'text/html', maxBytes: MAX_PAGE_HTML_BYTES, accept: 'text/html' });
+  if (!page) return [];
+  return extractLinkedItems(page.buffer.toString('utf8'), page.finalUrl);
+}
+
+/**
  * Fetches a result page and fingerprints its preview images. Returns an
  * array of { hash, flippedHash } (possibly empty). Safe to call on any URL.
  */
@@ -267,6 +303,8 @@ module.exports = {
   hashImageBuffer,
   hashImageUrl,
   hashPageImages,
+  fetchPageLinks,
+  extractLinkedItems,
   extractPageImageUrls,
   safeAgentFor,
   hammingDistance,

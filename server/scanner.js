@@ -581,7 +581,10 @@ async function runDailyScanForUser(user) {
             continue;
           }
 
-          if (matchesAlias(alias, result.url, result.title, result.snippet)) {
+          // Title or address only. Google's snippet often shows a page's menu,
+          // tag cloud or "related" text, which can name the client on pages
+          // that have nothing to do with them.
+          if (matchesAlias(alias, result.url, result.title)) {
             await db.insertLeak({
               userId: user.id,
               url: result.url,
@@ -739,7 +742,7 @@ async function runDailyScanForUser(user) {
     if (isJoinPageUrl(leak.url) || isSearchPageUrl(leak.url)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
-    } else if (leak.fingerprint_distance == null && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title, leak.snippet)) {
+    } else if (leak.fingerprint_distance == null && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
     } else {

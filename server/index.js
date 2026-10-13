@@ -1236,7 +1236,7 @@ app.get('/api/admin/leak-debug', async (req, res) => {
     for (const id of ids) if (own.has(id)) await db.markLeakStatus(id, 'dismissed');
     const leaks = (await db.getAllLeaksForUser(user.id, { limit: 60, offset: 0 })).map((l) => ({
       id: l.id, status: l.status, source: l.source, alias: l.matched_alias,
-      fingerprintDistance: l.fingerprint_distance, title: l.title, url: l.url,
+      fingerprintDistance: l.fingerprint_distance, title: l.title, snippet: l.snippet, url: l.url,
     }));
     res.json({ ok: true, dismissed: ids, leaks });
   } catch (err) {

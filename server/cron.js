@@ -4,18 +4,20 @@ const { runDailyScanForAllUsers } = require('./scanner');
 const db = require('./db');
 const { sendAdminDigestEmail } = require('./emailReport');
 
-async function sendAdminDigestIfNeeded() {
+async function sendAdminDigestIfNeeded({ includeSent = false } = {}) {
   try {
-    const pendingLeaks = await db.getPendingAdminDigestLeaks();
+    const pendingLeaks = await db.getPendingAdminDigestLeaks({ includeSent });
     if (!pendingLeaks.length) {
       console.log('Admin digest: nothing new to report today.');
-      return;
+      return { sent: 0 };
     }
     await sendAdminDigestEmail(pendingLeaks);
     await db.markLeaksDigestSent(pendingLeaks.map((l) => l.id));
     console.log(`Admin digest sent: ${pendingLeaks.length} item(s).`);
+    return { sent: pendingLeaks.length };
   } catch (err) {
     console.error('Admin digest failed:', err.message);
+    return { sent: 0, error: err.message };
     // Deliberately don't mark anything as sent if the email itself failed —
     // these items stay pending and get included in tomorrow's digest
     // instead of silently disappearing.

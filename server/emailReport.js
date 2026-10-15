@@ -1,7 +1,7 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { buildLeakExcelBuffer } = require('./excelReport');
-const { GOOGLE_REMOVAL_TOOL_URL, getMajorPlatformReportLink } = require('./constants');
+const { GOOGLE_REMOVAL_TOOL_URL, GOOGLE_DMCA_FORM_URL, googleDelistUrl, getMajorPlatformReportLink } = require('./constants');
 
 function getMailer() {
   if (!process.env.SMTP_HOST || process.env.SMTP_HOST === 'smtp.yourprovider.com') return null;
@@ -216,7 +216,8 @@ function buildAdminDigestHtml(leaks) {
     if (!byCreator[key]) byCreator[key] = { name: leak.creator_name, email: leak.creator_email, platforms: [], images: [] };
     if (leak.status === 'manual_review') {
       byCreator[key].platforms.push(leak);
-    } else if (leak.source === 'serper_image') {
+    } else {
+      // Pages and images found through Google — to be delisted from Google.
       byCreator[key].images.push(leak);
     }
   }
@@ -230,8 +231,8 @@ function buildAdminDigestHtml(leaks) {
 
     const imageRows = creator.images.map((leak) => `
       <tr>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee;">${leak.url}</td>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee;"><a href="${GOOGLE_REMOVAL_TOOL_URL}">Submit to Google</a></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #eee; word-break:break-all;">${googleDelistUrl(leak) || leak.url}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #eee;"><a href="${GOOGLE_DMCA_FORM_URL}">Google DMCA form</a></td>
       </tr>`).join('');
 
     return `
@@ -241,7 +242,7 @@ function buildAdminDigestHtml(leaks) {
         <table style="width:100%; border-collapse:collapse; font-size:.85rem;">${platformRows}</table>
       ` : ''}
       ${creator.images.length ? `
-        <p style="margin:16px 0 4px; font-weight:bold;">Google Images (${creator.images.length})</p>
+        <p style="margin:16px 0 4px; font-weight:bold;">Indexed on Google — submit for delisting (${creator.images.length})</p>
         <table style="width:100%; border-collapse:collapse; font-size:.85rem;">${imageRows}</table>
       ` : ''}
     `;
@@ -251,6 +252,7 @@ function buildAdminDigestHtml(leaks) {
     <div style="font-family:Arial,sans-serif; max-width:640px; margin:0 auto; color:#1a1a2e;">
       <h2 style="color:#0096F5;">SentryVo — Admin Manual Review Digest</h2>
       <p>${leaks.length} item(s) across ${Object.keys(byCreator).length} creator(s) need manual reporting today.</p>
+      <p style="font-size:.85rem; color:#555;">"Indexed on Google" links are pages and images that appear in Google results. Paste them into <a href="${GOOGLE_DMCA_FORM_URL}">Google's DMCA form</a>. A text file with the same links, one per line, is attached for copy-and-paste.</p>
       ${sections}
     </div>
   `;
@@ -263,11 +265,30 @@ async function sendAdminDigestEmail(leaks) {
   }
   const adminEmail = process.env.ADMIN_DIGEST_EMAIL || process.env.SMTP_USER;
 
+  // Plain-text list of the Google links, grouped by creator, for pasting
+  // into Google's form.
+  const lines = [];
+  const seenByCreator = {};
+  for (const leak of leaks) {
+    if (leak.status === 'manual_review') continue;
+    const url = googleDelistUrl(leak);
+    if (!url) continue;
+    const key = `${leak.creator_name} (${leak.creator_email})`;
+    seenByCreator[key] = seenByCreator[key] || new Set();
+    seenByCreator[key].add(url);
+  }
+  for (const [creator, urls] of Object.entries(seenByCreator)) {
+    lines.push(`# ${creator} — ${urls.size} link(s)`, ...urls, '');
+  }
+
   await mailer.sendMail({
     from: process.env.REPORT_FROM_EMAIL,
     to: adminEmail,
     subject: `SentryVo — ${leaks.length} item(s) need manual reporting today`,
     html: buildAdminDigestHtml(leaks),
+    attachments: lines.length
+      ? [{ filename: `google-delist-links-${new Date().toISOString().slice(0, 10)}.txt`, content: lines.join('\n'), contentType: 'text/plain' }]
+      : [],
   });
 }
 

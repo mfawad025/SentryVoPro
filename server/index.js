@@ -1181,8 +1181,9 @@ app.get('/api/admin/send-digest-now', async (req, res) => {
   if (!checkAdminKey(req, res)) return;
   try {
     const { sendAdminDigestIfNeeded } = require('./cron');
-    await sendAdminDigestIfNeeded();
-    res.json({ ok: true, message: 'Digest check complete — see server logs for whether anything was actually sent' });
+    const result = await sendAdminDigestIfNeeded({ includeSent: req.query.all === 'yes' });
+    if (result && result.error) return res.status(500).json({ ok: false, error: result.error });
+    res.json({ ok: true, itemsEmailed: result ? result.sent : 0, message: result && result.sent ? 'Digest emailed to your admin address' : 'Nothing to send' });
   } catch (err) {
     console.error('Manual digest trigger failed:', err.message);
     res.status(500).json({ error: err.message });

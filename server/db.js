@@ -558,16 +558,21 @@ async function logReportSent(userId, newLeaksCount) {
 // to 'manual_review' regardless of source for those), so it's correctly
 // classified as a platform item, not double-counted as a Google Images
 // item too — the caller distinguishes the two by checking `status` first.
-async function getPendingAdminDigestLeaks() {
+async function getPendingAdminDigestLeaks({ includeSent = false } = {}) {
+  // Everything the admin has to report by hand: major-platform leaks (own
+  // forms) and every page/image result found through Google Search or Google
+  // Images (to request delisting from Google). Raw CDN media files found by
+  // page crawling are not indexed pages, so they are left out.
   const result = await pool.query(`
     SELECT leaks.*, users.name AS creator_name, users.email AS creator_email
     FROM leaks
     JOIN users ON users.id = leaks.user_id
-    WHERE leaks.admin_digest_sent_at IS NULL
-      AND leaks.status <> 'dismissed'
-      AND (leaks.status = 'manual_review' OR leaks.source = 'serper_image')
+    WHERE ($1::boolean OR leaks.admin_digest_sent_at IS NULL)
+      AND ($1::boolean = false OR leaks.google_submitted_at IS NULL)
+      AND leaks.status NOT IN ('dismissed', 'removed')
+      AND (leaks.status = 'manual_review' OR leaks.source IN ('serper_web', 'serper_image', 'search_expand'))
     ORDER BY leaks.found_at ASC
-  `);
+  `, [includeSent]);
   return result.rows;
 }
 

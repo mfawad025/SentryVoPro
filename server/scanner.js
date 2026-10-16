@@ -203,9 +203,9 @@ function guessAbuseEmail(url) {
  * creator's own legitimate account — which would be both wrong and
  * embarrassing. This matches two ways, deliberately broad:
  *   1. Exact URL match against a submitted original link
- *   2. Same hostname as a submitted original link (covers the same site
- *      showing up with a different path, tracking params, http vs https,
- *      or www vs non-www)
+ *   2. Same hostname as a submitted original link, or any subdomain of it
+ *      (covers the same site showing up with a different path, tracking
+ *      params, http vs https, www vs non-www, or media/CDN subdomains)
  */
 function isOwnContent(resultUrl, originalLinks) {
   let resultHost;
@@ -218,8 +218,12 @@ function isOwnContent(resultUrl, originalLinks) {
   for (const ownUrl of originalLinks) {
     if (ownUrl === resultUrl) return true;
     try {
-      const ownHost = new URL(ownUrl).hostname.replace(/^www\./, '');
-      if (ownHost && ownHost === resultHost) return true;
+      const ownHost = new URL(ownUrl).hostname.replace(/^www\./, '').toLowerCase();
+      // Same host, or any SUBDOMAIN of it (own onlyfans.com/x also covers
+      // cdn.onlyfans.com, public.onlyfans.com ...). One-way on purpose: an
+      // own link on creator.blogspot.com must not cover all of blogspot.com.
+      const host = resultHost.toLowerCase();
+      if (ownHost && (host === ownHost || host.endsWith('.' + ownHost))) return true;
     } catch {
       // Not a parseable URL — skip host comparison for this entry
     }
@@ -736,10 +740,18 @@ async function runDailyScanForUser(user) {
   // Re-check everything still waiting for a takedown against the same
   // relevance rule — this clears out unrelated results saved by older
   // scans (before the filter existed) so no notice is sent for them.
+  // Same own-site rule for items already waiting in manual review, so the
+  // admin digest never lists the client's own pages or their subdomains.
+  for (const leak of await db.getLeaksByStatus(user.id, 'manual_review')) {
+    if (isOwnContent(leak.url, originalLinks)) await db.markLeakStatus(leak.id, 'dismissed');
+  }
   const pendingLeaks = await db.getLeaksByStatus(user.id, 'found');
   const newlyFound = [];
   for (const leak of pendingLeaks) {
-    if (isJoinPageUrl(leak.url) || isSearchPageUrl(leak.url)) {
+    if (isOwnContent(leak.url, originalLinks)) {
+      // The client's own site/subdomain — never report it.
+      await db.markLeakStatus(leak.id, 'dismissed');
+    } else if (isJoinPageUrl(leak.url) || isSearchPageUrl(leak.url)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
     } else if (leak.fingerprint_distance == null && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title)) {

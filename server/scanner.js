@@ -25,7 +25,7 @@ const db = require('./db');
 const fingerprint = require('./fingerprint');
 const { sendDailyReportEmail } = require('./emailReport');
 const { lookupHostingAndAbuseContacts, findSiteContactEmail, extractMediaLinksFromPage } = require('./hostLookup');
-const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform } = require('./constants');
+const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform, getOwnDomainFamilies } = require('./constants');
 
 // Google does not offer a public API for third parties to submit copyright
 // removal requests — their "Remove content from Google" tool is a web form
@@ -215,6 +215,10 @@ function isOwnContent(resultUrl, originalLinks) {
     return false;
   }
 
+  const families = getOwnDomainFamilies();
+  const host = resultHost.toLowerCase();
+  const covers = (own) => host === own || host.endsWith('.' + own);
+
   for (const ownUrl of originalLinks) {
     if (ownUrl === resultUrl) return true;
     try {
@@ -222,8 +226,11 @@ function isOwnContent(resultUrl, originalLinks) {
       // Same host, or any SUBDOMAIN of it (own onlyfans.com/x also covers
       // cdn.onlyfans.com, public.onlyfans.com ...). One-way on purpose: an
       // own link on creator.blogspot.com must not cover all of blogspot.com.
-      const host = resultHost.toLowerCase();
-      if (ownHost && (host === ownHost || host.endsWith('.' + ownHost))) return true;
+      if (ownHost && covers(ownHost)) return true;
+      // Same company, other domains (pornhub.com -> phncdn.com, ...).
+      for (const family of families) {
+        if (family.some((d) => ownHost === d || ownHost.endsWith('.' + d)) && family.some(covers)) return true;
+      }
     } catch {
       // Not a parseable URL — skip host comparison for this entry
     }

@@ -86,9 +86,33 @@ function googleDelistUrl(leak) {
   return isHttp(leak.url) ? leak.url : null;
 }
 
+// Sites that belong to the same company. If a client's original link is on
+// ANY domain in a family, every domain in that family (and its subdomains)
+// counts as the client's own content and is never reported — e.g. a client
+// with a pornhub.com model page is also covered on phncdn.com (media) and
+// the pornhub.org / pornhub.net mirrors. Only domains confidently known to
+// be the company's own go here; add more through OWN_DOMAIN_FAMILIES_EXTRA
+// in Render (JSON, e.g. [["example.com","examplecdn.com"]]).
+const OWN_DOMAIN_FAMILIES = [
+  ['pornhub.com', 'pornhub.org', 'pornhub.net', 'phncdn.com', 'modelhub.com'],
+  ['chaturbate.com', 'highwebmedia.com'],
+];
+
+function getOwnDomainFamilies() {
+  let extra = [];
+  try {
+    const parsed = JSON.parse(process.env.OWN_DOMAIN_FAMILIES_EXTRA || '[]');
+    if (Array.isArray(parsed)) extra = parsed.filter(Array.isArray);
+  } catch {
+    // Bad JSON in the env var — ignore it rather than break scanning.
+  }
+  return [...OWN_DOMAIN_FAMILIES, ...extra];
+}
+
 const GOOGLE_DMCA_FORM_URL = 'https://reportcontent.google.com/forms/dmca_search';
 
 module.exports = {
+  getOwnDomainFamilies,
   googleDelistUrl,
   GOOGLE_DMCA_FORM_URL,
   GOOGLE_REMOVAL_TOOL_URL,

@@ -1,7 +1,7 @@
 # SentryVo — how the system works right now
 
 Keep this file current whenever scanner, reporting or email behaviour changes.
-(Last updated: 2026-10-16, later)
+(Last updated: 2026-10-17)
 
 ## Scanning (server/scanner.js, daily cron 08:00)
 - Serper.dev Google search, `num: 100` (paid credits). Text queries per alias, plus Telegram (`t.me`) and a rotating slice of known leak sites. Image queries on Google Images.
@@ -31,7 +31,15 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 - `/api/admin/send-digest-now[?all=yes]` — send the admin digest now (`all=yes` = re-send everything not yet marked submitted to Google).
 - `/api/admin/leak-debug?email=[&dismiss=ids]` — inspect / dismiss leaks.
 - `/api/admin/google-delist?userId=` and `POST .../mark` — per-client Google list; `admin-google-delist.html`.
-- `/api/scan/run-now` is still UNAUTHENTICATED (known; lock it behind the admin key).
+- `/api/scan/run-now` and `/api/test-email` also need the admin key now (either `?key=` or an `X-Admin-Key` header).
+
+## Free scan (homepage)
+- One free scan per visitor, ever: `free_scans` table keyed by a salted SHA-256 of the IP (`FREE_SCAN_SALT`), plus a 1-year `sv_free_scan_used` cookie. Failed searches give the scan back. Site-wide daily cap `FREE_SCAN_DAILY_SITE_CAP` still applies.
+- Known limits: visitors sharing one IP (office, some mobile carriers) share one free scan; a VPN plus cleared cookies gets another.
+
+## Security
+- Login/reset: 10 attempts per 15 min per IP. Register/forgot-password: 10 per hour per IP. Passwords min 6 characters everywhere.
+- Dashboards, agency dashboard, free-scan results and report emails escape all scraped text and only link `http(s)` URLs.
 
 ## Not built yet
 Follow-up/escalation notices, cancellation handling from Lemon Squeezy (`subscription_cancelled/expired/payment_failed` are ignored), twice-daily scans for Multi plan.

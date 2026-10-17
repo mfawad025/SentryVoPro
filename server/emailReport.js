@@ -23,14 +23,20 @@ function statusBadge(status) {
   return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-family:sans-serif;background:${colors[status]}22;color:${colors[status]};">${labels[status]}</span>`;
 }
 
+// Leak URLs and names come from scraped pages, so escape them before they
+// go into email HTML.
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function buildReportHtml(user, newLeaks, summary) {
   const rows = newLeaks
     .map(
       (leak) => `
       <tr>
-        <td style="padding:10px 0;border-bottom:1px solid #F1EBE0;color:#2A2621;font-size:14px;">${leak.matched_alias || ''}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #F1EBE0;color:#2A2621;font-size:14px;">${esc(leak.matched_alias)}</td>
         <td style="padding:10px 0;border-bottom:1px solid #F1EBE0;">
-          <a href="${leak.url}" style="color:#2A2621;font-size:13px;word-break:break-all;">${leak.url}</a>
+          <a href="${esc(leak.url)}" style="color:#2A2621;font-size:13px;word-break:break-all;">${esc(leak.url)}</a>
         </td>
         <td style="padding:10px 0;border-bottom:1px solid #F1EBE0;">${statusBadge(leak.status)}</td>
       </tr>`
@@ -43,7 +49,7 @@ function buildReportHtml(user, newLeaks, summary) {
   <div style="background:#FAF7F2;padding:32px;font-family:sans-serif;">
     <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:14px;padding:32px;">
       <h2 style="color:#2A2621;font-family:sans-serif;margin:0 0 6px;">Your SentryVo Daily Report</h2>
-      <p style="color:#8C8275;margin:0 0 24px;font-size:14px;">Hi ${user.name}, here's what happened in your case today.</p>
+      <p style="color:#8C8275;margin:0 0 24px;font-size:14px;">Hi ${esc(user.name)}, here's what happened in your case today.</p>
 
       <div style="display:flex;gap:10px;margin-bottom:26px;">
         <div style="flex:1;background:#FAF7F2;border-radius:10px;padding:14px;text-align:center;">
@@ -185,7 +191,7 @@ async function sendWelcomeSetPasswordEmail(toAddress, resetUrl, creatorName) {
     html: `
       <div style="font-family:Arial,sans-serif; max-width:480px; margin:0 auto; color:#1a1a2e;">
         <h2 style="color:#0096F5;">Welcome to SentryVo</h2>
-        <p>Hi ${creatorName},</p>
+        <p>Hi ${esc(creatorName)},</p>
         <p>Your account has been set up and is already active — daily scanning and takedown protection has started. Click below to set your password and log in to your dashboard.</p>
         <p style="margin:28px 0;">
           <a href="${resetUrl}" style="background:#0096F5; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">Set Your Password</a>
@@ -225,18 +231,18 @@ function buildAdminDigestHtml(leaks) {
   const sections = Object.values(byCreator).map((creator) => {
     const platformRows = creator.platforms.map((leak) => `
       <tr>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee;">${leak.url}</td>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee;"><a href="${getMajorPlatformReportLink(leak.url) || '#'}">${getMajorPlatformReportLink(leak.url) ? 'Report here' : 'No known form'}</a></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #eee;">${esc(leak.url)}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #eee;"><a href="${esc(getMajorPlatformReportLink(leak.url) || '#')}">${getMajorPlatformReportLink(leak.url) ? 'Report here' : 'No known form'}</a></td>
       </tr>`).join('');
 
     const imageRows = creator.images.map((leak) => `
       <tr>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee; word-break:break-all;">${googleDelistUrl(leak) || leak.url}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #eee; word-break:break-all;">${esc(googleDelistUrl(leak) || leak.url)}</td>
         <td style="padding:6px 10px; border-bottom:1px solid #eee;"><a href="${GOOGLE_DMCA_FORM_URL}">Google DMCA form</a></td>
       </tr>`).join('');
 
     return `
-      <h3 style="margin-top:28px;">${creator.name} (${creator.email})</h3>
+      <h3 style="margin-top:28px;">${esc(creator.name)} (${esc(creator.email)})</h3>
       ${creator.platforms.length ? `
         <p style="margin:8px 0 4px; font-weight:bold;">Platforms (${creator.platforms.length})</p>
         <table style="width:100%; border-collapse:collapse; font-size:.85rem;">${platformRows}</table>

@@ -166,18 +166,29 @@ async function requireAuth(req, res, next) {
 
 // ---------------- Free scan (public, no login) ----------------
 // Real search, real results — but this is a public, unauthenticated
-// endpoint, so it's rate-limited two ways:
-//   1. Per visitor: 3 free scans per IP per day (express-rate-limit)
-//   2. Site-wide: a hard daily cap so anonymous traffic can't eat the
+// endpoint, so it's limited three ways:
+//   1. One free scan per visitor, ever. Enforced server-side by a salted
+//      hash of the visitor's IP in the free_scans table, plus a long-lived
+//      cookie so the same browser stays blocked on a different network.
+//   2. A short burst limiter so nobody can hammer the endpoint/database.
+//   3. Site-wide: a hard daily cap so anonymous traffic can't eat the
 //      Serper.dev quota your paying subscribers' daily scans
 //      depend on. Adjust FREE_SCAN_DAILY_SITE_CAP in .env as your quota allows.
+const FREE_SCAN_COOKIE_NAME = 'sv_free_scan_used';
+const FREE_SCAN_USED_MESSAGE = 'You have already used your free scan. Sign up for full protection to see every result and get automatic takedowns.';
+
 const freeScanPerIpLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 3,
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Free scan limit reached for today. Sign up for continuous protection instead.' },
+  message: { error: FREE_SCAN_USED_MESSAGE },
 });
+
+function freeScanVisitorHash(req) {
+  const salt = process.env.FREE_SCAN_SALT || process.env.ADMIN_SECRET_KEY || 'sentryvo-free-scan';
+  return crypto.createHash('sha256').update(`${salt}:${req.ip}`).digest('hex');
+}
 
 let siteWideScanCount = 0;
 let siteWideScanResetAt = startOfNextDay();
@@ -196,39 +207,85 @@ function siteWideCapReached() {
 }
 
 app.post('/api/scan/free', freeScanPerIpLimiter, async (req, res) => {
+  let claimedHash = null;
   try {
-    const alias = String(req.body?.alias || '').trim();
+    // Quotes would break out of the exact-phrase search below, so drop them.
+    const alias = String(req.body?.alias || '').replace(/["“”]/g, '').trim();
     if (alias.length < 2) {
       return res.status(400).json({ error: 'Enter a name or username to scan (at least 2 characters).' });
     }
     if (alias.length > 60) {
       return res.status(400).json({ error: 'That name is too long — try just the stage name or username.' });
     }
+    if (req.cookies?.[FREE_SCAN_COOKIE_NAME]) {
+      return res.status(429).json({ error: FREE_SCAN_USED_MESSAGE, alreadyUsed: true });
+    }
     if (siteWideCapReached()) {
       return res.status(429).json({ error: 'Free scans are fully booked for today — try again tomorrow, or sign up for continuous protection.' });
     }
 
+    const visitorHash = freeScanVisitorHash(req);
+    if (!(await db.claimFreeScan(visitorHash, alias))) {
+      return res.status(429).json({ error: FREE_SCAN_USED_MESSAGE, alreadyUsed: true });
+    }
+    claimedHash = visitorHash;
+
     siteWideScanCount++;
     const results = await searchGoogle(`"${alias}" leaked`);
+    claimedHash = null; // the scan ran, so the free scan is now spent
 
+    res.cookie(FREE_SCAN_COOKIE_NAME, '1', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+    });
     res.json({
       alias,
       totalFound: results.length,
-      results: results.slice(0, 3), // show a taste; full list is a subscriber feature
+      // show a taste; full list is a subscriber feature
+      results: results.slice(0, 3).map((r) => ({ url: r.url, title: r.title })),
     });
   } catch (err) {
     console.error('Free scan error:', err.message);
+    if (claimedHash) {
+      siteWideScanCount = Math.max(0, siteWideScanCount - 1);
+      await db.releaseFreeScan(claimedHash).catch((e) => console.error('Could not release free scan:', e.message));
+    }
     res.status(502).json({ error: 'Scan is temporarily unavailable — please try again shortly.' });
   }
 });
 
+// ---------------- Rate limits for account endpoints ----------------
+// Stops password guessing on /api/login and stops bots from mass-creating
+// accounts or spamming password-reset emails.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please wait 15 minutes and try again.' },
+});
+const accountLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please wait a while and try again.' },
+});
+
+const MIN_PASSWORD_LENGTH = 6;
+
 // ---------------- Registration (creates account + starts Lemon Squeezy checkout) ----------------
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', accountLimiter, async (req, res) => {
   try {
     const { name, email, mobile, password, plan, platforms, aliases, originalLinks } = req.body || {};
 
     if (!name || !email || !mobile || !password || !plan) {
       return res.status(400).json({ error: 'name, email, mobile, password and plan are required' });
+    }
+    if (String(password).length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ error: `Choose a password at least ${MIN_PASSWORD_LENGTH} characters long` });
     }
     if (!['single', 'multi'].includes(plan)) {
       return res.status(400).json({ error: 'plan must be "single" or "multi"' });
@@ -285,12 +342,15 @@ app.post('/api/register', async (req, res) => {
 // activation flow as individual registration above, so nothing about
 // payment handling needed to change. Only Starter/Growth are self-serve;
 // Enterprise is routed to the Contact Sales form on agencies.html instead.
-app.post('/api/register/agency', async (req, res) => {
+app.post('/api/register/agency', accountLimiter, async (req, res) => {
   try {
     const { agencyName, ownerName, email, mobile, password, tier } = req.body || {};
 
     if (!agencyName || !ownerName || !email || !mobile || !password || !tier) {
       return res.status(400).json({ error: 'agencyName, ownerName, email, mobile, password and tier are required' });
+    }
+    if (String(password).length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ error: `Choose a password at least ${MIN_PASSWORD_LENGTH} characters long` });
     }
     if (!['agency_starter', 'agency_growth'].includes(tier)) {
       return res.status(400).json({ error: 'tier must be "agency_starter" or "agency_growth" (Enterprise uses the Contact Sales form instead)' });
@@ -327,7 +387,7 @@ app.post('/api/register/agency', async (req, res) => {
 });
 
 // ---------------- Login (real session, httpOnly cookie) ----------------
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     const user = await db.getUserByEmail(email);
@@ -356,14 +416,16 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/logout', async (req, res) => {
   const token = req.cookies?.[SESSION_COOKIE_NAME];
   if (token) await db.deleteSession(token);
-  res.clearCookie(SESSION_COOKIE_NAME);
+  // Must repeat the attributes the cookie was set with, or browsers ignore
+  // the clear on a cross-site (GitHub Pages -> Render) request.
+  res.clearCookie(SESSION_COOKIE_NAME, { httpOnly: true, secure: true, sameSite: 'none' });
   res.json({ ok: true });
 });
 
 // ---------------- Forgot / reset password ----------------
 const RESET_TOKEN_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
-app.post('/api/forgot-password', async (req, res) => {
+app.post('/api/forgot-password', accountLimiter, async (req, res) => {
   try {
     const email = req.body?.email;
     if (!email) {
@@ -404,7 +466,7 @@ app.post('/api/forgot-password', async (req, res) => {
   }
 });
 
-app.post('/api/reset-password', async (req, res) => {
+app.post('/api/reset-password', loginLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body || {};
     if (!token || !newPassword) {
@@ -611,6 +673,9 @@ app.post('/api/agency/add-creator', requireAuth, async (req, res) => {
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'name, email and password are required' });
     }
+    if (String(password).length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ error: `Choose a password at least ${MIN_PASSWORD_LENGTH} characters long` });
+    }
 
     const existing = await db.getUserByEmail(email);
     if (existing) {
@@ -648,10 +713,11 @@ app.post('/api/agency/add-creator', requireAuth, async (req, res) => {
 // ---------------- Manual trigger for testing the scan pipeline ----------------
 // GET version: just visit this URL directly in a browser, no extra tools needed.
 app.get('/api/scan/run-now', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
   try {
     const { runDailyScanForAllUsers } = require('./scanner');
     const results = await runDailyScanForAllUsers();
-    res.json({ ok: true, results });
+    res.json({ ok: true, usersScanned: results.length });
   } catch (err) {
     console.error('Manual scan trigger failed:', err.message);
     res.status(500).json({ error: 'Scan failed to run' });
@@ -660,10 +726,11 @@ app.get('/api/scan/run-now', async (req, res) => {
 
 // POST version, for anyone using a tool like Postman/curl instead.
 app.post('/api/scan/run-now', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
   try {
     const { runDailyScanForAllUsers } = require('./scanner');
     const results = await runDailyScanForAllUsers();
-    res.json({ ok: true, results });
+    res.json({ ok: true, usersScanned: results.length });
   } catch (err) {
     console.error('Manual scan trigger failed:', err.message);
     res.status(500).json({ error: 'Scan failed to run' });
@@ -678,6 +745,7 @@ app.post('/api/scan/run-now', async (req, res) => {
 // GET version: just visit this URL directly in a browser, no extra tools
 // needed — e.g. https://api.sentryvo.com/api/test-email?to=you@example.com
 app.get('/api/test-email', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
   try {
     const { sendTestEmail } = require('./emailReport');
     const to = req.query?.to || process.env.SMTP_USER;
@@ -694,6 +762,7 @@ app.get('/api/test-email', async (req, res) => {
 
 // POST version, for anyone using a tool like Postman/curl instead.
 app.post('/api/test-email', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
   try {
     const { sendTestEmail } = require('./emailReport');
     const to = req.body?.to || process.env.SMTP_USER;
@@ -719,17 +788,27 @@ app.post('/api/test-email', async (req, res) => {
 // the URL. Treat this key like a password — don't share it, don't commit
 // it to a public file.
 function checkAdminKey(req, res) {
-  const key = req.query?.key;
+  // The X-Admin-Key header is preferred (it doesn't end up in browser
+  // history or server logs); ?key= still works for the existing admin pages.
+  const key = String(req.get('x-admin-key') || req.query?.key || '');
   const expected = process.env.ADMIN_SECRET_KEY;
   if (!expected || expected === 'change_me_to_something_random') {
     res.status(500).json({ error: 'ADMIN_SECRET_KEY is not configured — set it in your environment first' });
     return false;
   }
-  if (key !== expected) {
+  if (!safeEqual(key, expected)) {
     res.status(401).json({ error: 'Invalid or missing ?key=' });
     return false;
   }
   return true;
+}
+
+// Constant-time comparison, so the key can't be guessed one character at a
+// time by measuring response times.
+function safeEqual(a, b) {
+  const bufA = crypto.createHash('sha256').update(a).digest();
+  const bufB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 // Usage: https://api.sentryvo.com/api/admin/google-delist?userId=ID&key=YOUR_ADMIN_KEY

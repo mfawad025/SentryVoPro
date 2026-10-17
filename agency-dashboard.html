@@ -145,7 +145,7 @@
 
       document.getElementById('dash-agency-label').textContent = `Agency: ${data.agency.name}`;
       document.getElementById('sidebar-agency-info').innerHTML =
-        `<strong style="color:var(--text-hi);">${data.agency.name}</strong><br>${data.agency.tier.replace('agency_', '').replace(/^\w/, c => c.toUpperCase())} plan`;
+        `<strong style="color:var(--text-hi);">${escapeHtml(data.agency.name)}</strong><br>${escapeHtml(data.agency.tier).replace('agency_', '').replace(/^\w/, c => c.toUpperCase())} plan`;
 
       if (data.ownerStatus !== 'active') {
         inactivePanel.classList.remove('hidden');
@@ -170,12 +170,12 @@
       } else {
         rowsEl.innerHTML = data.members.map((m) => `
           <tr>
-            <td>${m.name}</td>
-            <td>${m.email}</td>
-            <td>${m.platforms.join(', ') || '—'}</td>
-            <td>${m.summary.total || 0}</td>
-            <td>${m.summary.removed || 0}</td>
-            <td>${m.status}</td>
+            <td>${escapeHtml(m.name)}</td>
+            <td>${escapeHtml(m.email)}</td>
+            <td>${escapeHtml(m.platforms.join(', ') || '—')}</td>
+            <td>${Number(m.summary.total) || 0}</td>
+            <td>${Number(m.summary.removed) || 0}</td>
+            <td>${escapeHtml(m.status)}</td>
           </tr>
         `).join('');
       }

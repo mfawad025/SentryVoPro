@@ -168,6 +168,15 @@ async function initSchema() {
       email TEXT NOT NULL,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- One free homepage scan per visitor, for life. visitor_hash is a
+    -- salted SHA-256 of the visitor's IP address (see index.js) — the raw
+    -- IP is never stored.
+    CREATE TABLE IF NOT EXISTS free_scans (
+      visitor_hash TEXT PRIMARY KEY,
+      alias TEXT,
+      scanned_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 }
 // Run once at startup; index.js awaits this before accepting requests.
@@ -277,6 +286,25 @@ function isReportDue(user) {
 }
 
 // ---------- Sessions (simple token-based auth) ----------
+// ---------- Free scans (one per visitor) ----------
+// Atomic claim: returns true only for the first request from this visitor,
+// so two simultaneous requests can't both get a free scan.
+async function claimFreeScan(visitorHash, alias) {
+  const result = await pool.query(
+    `INSERT INTO free_scans (visitor_hash, alias) VALUES ($1, $2)
+     ON CONFLICT (visitor_hash) DO NOTHING
+     RETURNING visitor_hash`,
+    [visitorHash, alias]
+  );
+  return result.rowCount === 1;
+}
+
+// Gives the visitor their free scan back when the scan itself failed on our
+// side (e.g. Serper.dev down) — they shouldn't lose it to our outage.
+async function releaseFreeScan(visitorHash) {
+  await pool.query(`DELETE FROM free_scans WHERE visitor_hash = $1`, [visitorHash]);
+}
+
 async function createSession(token, userId, expiresAt) {
   await pool.query(
     `INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)`,
@@ -641,6 +669,8 @@ module.exports = {
   getUserByEmail,
   markReportSentNow,
   isReportDue,
+  claimFreeScan,
+  releaseFreeScan,
   createSession,
   getSession,
   deleteSession,

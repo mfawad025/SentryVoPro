@@ -18,7 +18,9 @@ The hero section has a real, working free-scan box — no login required.
 It's a genuine Serper.dev query, not a mockup, so it draws from
 the same quota as your daily subscriber scans. Two layers of protection:
 
-- **Per visitor**: 3 scans per IP per day
+- **Per visitor**: one free scan, ever — tracked by a salted hash of the
+  visitor's IP in the `free_scans` table plus a long-lived browser cookie.
+  If the search itself fails on our side, the visitor gets their scan back.
 - **Site-wide**: a hard cap across *all* visitors combined (default 25/day,
   set via `FREE_SCAN_DAILY_SITE_CAP` in `.env`) — this exists so a burst of
   anonymous traffic can't eat the quota your paying subscribers depend on
@@ -110,7 +112,7 @@ pointed at this server. Test the scan pipeline directly:
 ```bash
 npm run scan-now
 # or, with the server running:
-curl -X POST http://localhost:4242/api/scan/run-now
+curl -X POST -H "X-Admin-Key: $ADMIN_SECRET_KEY" http://localhost:4242/api/scan/run-now
 ```
 
 ## Excel reports
@@ -212,8 +214,9 @@ can wire up for you.
 - Keep the server **always-on** (Render Starter tier or equivalent, not a
   free tier that sleeps) or the daily cron job won't fire reliably.
   Alternative: use an external cron service (e.g. cron-job.org, free) to hit
-  `/api/scan/run-now` on a schedule instead of relying on `node-cron` inside
-  a sleeping process.
+  `/api/scan/run-now?key=YOUR_ADMIN_KEY` on a schedule instead of relying on
+  `node-cron` inside a sleeping process. (The admin key is required — this
+  endpoint runs every subscriber's scan and spends Serper credits.)
 - Watch your Serper.dev usage (2,500 free queries on signup, ~$1/1,000
   after) — the query count per subscriber scales with how many aliases and
   platforms they have, so budget accordingly as you grow.

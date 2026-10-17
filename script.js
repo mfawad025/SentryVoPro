@@ -138,7 +138,22 @@ function initFreeScan() {
   const resultsBox = document.getElementById('free-scan-results');
   if (!btn || !input || !resultsBox) return;
 
+  // The server is what actually enforces one scan per visitor; this flag
+  // just shows returning visitors the right state without a wasted request.
+  const USED_KEY = 'sv_free_scan_used';
+  const markUsed = () => {
+    try { localStorage.setItem(USED_KEY, '1'); } catch (e) { /* storage blocked */ }
+    input.disabled = true;
+    btn.disabled = true;
+    btn.textContent = 'Scan Used';
+    if (note) note.innerHTML = 'You have used your free scan. <a href="register.html" style="color:var(--rust);">Get full protection</a> for daily scans and takedowns.';
+  };
+  let alreadyUsed = false;
+  try { alreadyUsed = localStorage.getItem(USED_KEY) === '1'; } catch (e) { /* storage blocked */ }
+  if (alreadyUsed) markUsed();
+
   async function runScan() {
+    if (btn.disabled) return;
     const alias = input.value.trim();
     if (alias.length < 2) {
       resultsBox.classList.remove('hidden');
@@ -148,6 +163,7 @@ function initFreeScan() {
 
     btn.disabled = true;
     const originalLabel = btn.textContent;
+    let used = false;
     btn.textContent = 'Scanning…';
     resultsBox.classList.remove('hidden');
     resultsBox.innerHTML = `<p style="color:var(--text-low); font-size:.85rem; margin:0;">Searching the web for "${escapeHtml(alias)}"…</p>`;
@@ -156,15 +172,19 @@ function initFreeScan() {
       const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/scan/free`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include', // carries the cookie that marks the free scan as used
         body: JSON.stringify({ alias }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        if (data.alreadyUsed) used = true;
         resultsBox.innerHTML = `<p style="color:#0096F5; font-size:.85rem; margin:0;">${escapeHtml(data.error || 'Scan failed — please try again shortly.')}</p>`;
+        if (data.alreadyUsed) resultsBox.innerHTML += `<a href="register.html" class="btn btn-primary" style="margin-top:14px; display:inline-flex;">Get Full Protection</a>`;
         return;
       }
+      used = true;
 
       if (!data.results || !data.results.length) {
         resultsBox.innerHTML = `
@@ -177,7 +197,7 @@ function initFreeScan() {
         .map(
           (r) => `
           <div style="padding:10px 0; border-top:1px solid var(--line-soft);">
-            <a href="${escapeAttr(r.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-hi); font-size:.85rem; word-break:break-all;">${escapeHtml(r.title || r.url)}</a>
+            <a href="${escapeAttr(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-hi); font-size:.85rem; word-break:break-all;">${escapeHtml(r.title || r.url)}</a>
           </div>`
         )
         .join('');
@@ -197,8 +217,12 @@ function initFreeScan() {
       console.error('Free scan error:', err);
       resultsBox.innerHTML = `<p style="color:#0096F5; font-size:.85rem; margin:0;">Could not reach the scan server. Please try again in a moment.</p>`;
     } finally {
-      btn.disabled = false;
-      btn.textContent = originalLabel;
+      if (used) {
+        markUsed();
+      } else {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
     }
   }
 
@@ -212,7 +236,12 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function escapeAttr(str) {
-  return String(str).replace(/"/g, '&quot;');
+  return escapeHtml(str);
+}
+// Only http(s) links are clickable — blocks javascript: and data: URLs
+// coming from scraped search results.
+function safeUrl(url) {
+  return /^https?:\/\//i.test(String(url || '')) ? String(url) : '#';
 }
 
 // ---------------- Live scan-to-takedown demo cycle ----------------

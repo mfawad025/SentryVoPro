@@ -219,7 +219,7 @@
 
   function statusBadgeHtml(status) {
     const labels = { found: 'Leak Found', reported: 'DMCA Sent', removed: 'Removed', manual_review: 'Manual Review' };
-    return `<span class="badge ${status}">${labels[status] || status}</span>`;
+    return `<span class="badge ${escapeAttr(status)}">${escapeHtml(labels[status] || status)}</span>`;
   }
 
   // ---------------- Tab switching ----------------
@@ -248,7 +248,7 @@
 
       document.getElementById('dash-case-label').textContent = `Case: ${data.name}`;
       document.getElementById('sidebar-user').innerHTML =
-        `Logged in as<br><strong style="color:var(--text-hi);">${data.email}</strong><br>` +
+        `Logged in as<br><strong style="color:var(--text-hi);">${escapeHtml(data.email)}</strong><br>` +
         `${data.plan === 'multi' ? 'Multiple Keywords/Accounts' : 'Single Keyword/Account'} plan`;
 
       const s = data.summary || {};
@@ -285,7 +285,7 @@
     rowsEl.innerHTML = recent.length ? recent.map((leak) => `
       <tr>
         <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
-        <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
+        <td><a href="${escapeAttr(safeUrl(leak.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${escapeHtml(leak.url)}</a></td>
         <td>${statusBadgeHtml(leak.status)}</td>
         <td>${new Date(leak.found_at).toLocaleDateString()}</td>
       </tr>
@@ -315,7 +315,7 @@
     rowsEl.innerHTML = leaks.length ? leaks.map((leak) => `
       <tr>
         <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
-        <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
+        <td><a href="${escapeAttr(safeUrl(leak.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${escapeHtml(leak.url)}</a></td>
         <td>${statusBadgeHtml(leak.status)}</td>
         <td>${new Date(leak.found_at).toLocaleDateString()}</td>
       </tr>
@@ -328,7 +328,7 @@
     const rowsEl = document.getElementById('takedowns-rows');
     rowsEl.innerHTML = actioned.length ? actioned.map((leak) => `
       <tr>
-        <td><a href="${leak.url}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${leak.url}</a></td>
+        <td><a href="${escapeAttr(safeUrl(leak.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${escapeHtml(leak.url)}</a></td>
         <td>${statusBadgeHtml(leak.status)}</td>
         <td>${new Date(leak.found_at).toLocaleDateString()}</td>
       </tr>
@@ -340,23 +340,23 @@
 
     const aliasesList = document.getElementById('profile-aliases-list');
     aliasesList.innerHTML = data.aliases?.length
-      ? data.aliases.map((a) => `<li>${a}</li>`).join('')
+      ? data.aliases.map((a) => `<li>${escapeHtml(a)}</li>`).join('')
       : '<li style="color:var(--text-low); list-style:none; margin-left:-20px;">None yet</li>';
 
     const linksList = document.getElementById('profile-links-list');
     linksList.innerHTML = data.originalLinks?.length
-      ? data.originalLinks.map((u) => `<li><a href="${u}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid);">${u}</a></li>`).join('')
+      ? data.originalLinks.map((u) => `<li><a href="${escapeAttr(safeUrl(u))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid);">${escapeHtml(u)}</a></li>`).join('')
       : '<li style="color:var(--text-low); list-style:none; margin-left:-20px;">None yet</li>';
   }
 
   function renderBilling(data) {
     const planLabel = data.plan === 'multi' ? 'Multiple Keywords/Accounts' : data.plan === 'single' ? 'Single Keyword/Account' : data.plan.replace('agency_', 'Agency ').replace(/^\w/, (c) => c.toUpperCase());
     document.getElementById('billing-plan-text').innerHTML =
-      `<strong>${planLabel}</strong><br>Status: ${data.status}<br>Report schedule: ${data.reportFrequencyDays === 1 ? 'Daily' : `Every ${data.reportFrequencyDays} days`}`;
+      `<strong>${escapeHtml(planLabel)}</strong><br>Status: ${escapeHtml(data.status)}<br>Report schedule: ${data.reportFrequencyDays === 1 ? 'Daily' : `Every ${data.reportFrequencyDays} days`}`;
 
     const portalWrap = document.getElementById('billing-portal-wrap');
     if (data.customerPortalUrl) {
-      portalWrap.innerHTML = `<a href="${data.customerPortalUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Manage Subscription</a>`;
+      portalWrap.innerHTML = `<a href="${escapeAttr(safeUrl(data.customerPortalUrl))}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Manage Subscription</a>`;
     } else {
       portalWrap.innerHTML = `<p style="font-size:.85rem; color:var(--text-low);">To manage or cancel your subscription, use the link in the receipt email Lemon Squeezy sent when you subscribed, or <a href="contact.html" style="color:var(--rust);">contact us</a> for help.</p>`;
     }

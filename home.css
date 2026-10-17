@@ -30,8 +30,8 @@
 .h-hero{ padding-block:clamp(30px,5vw,60px) clamp(50px,7vw,80px) !important; }
 .h-hero-grid{ display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:clamp(28px,5vw,64px); align-items:center; }
 @media (max-width:980px){ .h-hero-grid{ grid-template-columns:1fr; } }
-.h-hero h1{ font-size:clamp(2.6rem,6.6vw,5.4rem); line-height:1; font-weight:800; letter-spacing:-.045em; margin-block:20px 22px; }
-.h-hero h1 .ln{ display:block; }
+.h-hero h1{ font-size:clamp(2.3rem,4.6vw,4.1rem); line-height:1.02; font-weight:800; letter-spacing:-.045em; margin-block:20px 22px; max-width:12ch; }
+.h-hero h1 .ln{ display:inline; }
 .h-hero h1 .gone{ color:var(--rust); }
 .redact{ position:relative; display:inline-block; }
 .redact::after{ content:""; position:absolute; left:-.04em; right:-.04em; top:.12em; bottom:.02em; background:var(--ink); border-radius:3px; transform-origin:right; animation:hUnredact .9s var(--ease) both; animation-delay:var(--d,.3s); }

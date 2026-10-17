@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SentryVo — AI Leak Detection & DMCA Takedowns for Creators</title>
+<title>SentryVo — Leak Detection & DMCA Takedowns for Creators</title>
 <meta name="description" content="SentryVo scans the web around the clock for stolen or leaked content, files DMCA takedowns automatically, and helps creators protect their brand and revenue.">
 <script type="application/ld+json">
 {
@@ -56,10 +56,12 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="icon" type="image/png" href="assets/logo-icon.png">
 <link rel="canonical" href="https://www.sentryvo.com/index.html">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="home.css">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -135,21 +137,10 @@
 </head>
 <body>
 
-<div class="marquee">
-  <div class="marquee-track">
-    <span>SENTRYVO — AI-POWERED LEAK DETECTION</span>
-    <span>AUTOMATED DMCA TAKEDOWNS</span>
-    <span>BUILT FOR CREATORS</span>
-    <span>SENTRYVO — AI-POWERED LEAK DETECTION</span>
-    <span>AUTOMATED DMCA TAKEDOWNS</span>
-    <span>BUILT FOR CREATORS</span>
-  </div>
-</div>
-
 <header class="site-header">
   <div class="wrap nav">
     <a href="index.html" class="logo">
-      <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
+      <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="currentColor" stroke-width="4" opacity=".35"/><g class="sweep"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" style="fill:var(--rust)"/></g><circle cx="46" cy="42" r="3.2" fill="currentColor"/><circle cx="32" cy="32" r="5" style="fill:var(--rust)"/></svg><span>SentryVo</span>
     </a>
     <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">MENU</button>
     <nav class="nav-links">
@@ -164,399 +155,233 @@
   </div>
 </header>
 
-<section class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <span class="eyebrow">AI Brand Protection</span>
-      <h1>Stop leaks.<br>Protect your <span class="accent">brand</span> and revenue.</h1>
-      <p class="lede">SentryVo scans the web around the clock, finds stolen or leaked content, and files DMCA takedowns automatically — so fans find the real you, not a pirated copy.</p>
-      <div class="hero-actions">
-        <a href="#pricing" class="btn btn-primary btn-lg">Get Protected</a>
-        <a href="#how-it-works" class="btn btn-lg">See How It Works</a>
+<main class="home" id="top">
+  <section class="h-hero">
+    <div class="wrap h-hero-grid">
+      <div>
+        <span class="h-label">Leak detection &amp; DMCA takedowns for creators</span>
+        <h1>
+          <span class="ln"><span class="redact" style="--d:.25s">Leaked</span> <span class="redact" style="--d:.4s">today.</span></span>
+          <span class="ln gone"><span class="redact" style="--d:.6s">Gone</span> <span class="redact" style="--d:.75s">tomorrow.</span></span>
+        </h1>
+        <p class="h-lede">Every morning SentryVo searches Google, Telegram, Reddit and known leak sites for your stage names on <span class="rotator" id="h-rot"><span class="on">OnlyFans</span><span>Fansly</span><span>ManyVids</span><span>Chaturbate</span><span>Instagram</span></span>. <b>When we find a stolen copy, we send the DMCA notice to the real host and keep checking until it's gone.</b></p>
+
+        <div class="h-scan free-scan-box">
+          <div class="h-scan-top"><label for="free-scan-input">Free scan</label><span><b>1 per visitor</b> · no account needed</span></div>
+          <div class="h-scan-row">
+            <input type="text" id="free-scan-input" placeholder="Your stage name or username" autocomplete="off">
+            <button id="free-scan-btn" class="btn btn-primary" type="button">Scan free</button>
+          </div>
+          <p id="free-scan-note">One free scan per visitor. No account needed.</p>
+          <div id="free-scan-results" class="hidden"></div>
+        </div>
+        <p class="h-trust">Ready for full protection? <a href="pricing.html">See plans from $30 →</a></p>
       </div>
 
-      <div class="free-scan-box" style="margin-top:30px; padding:22px; background:var(--ink-2); border:1px solid var(--line); border-radius:14px; max-width:480px;">
-        <label for="free-scan-input" style="display:block; font-family:var(--font-head); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; color:var(--sage); margin-bottom:10px;">Try it now — free scan</label>
-        <div style="display:flex; gap:10px;">
-          <input type="text" id="free-scan-input" placeholder="Your stage name or username" style="flex:1; background:rgba(246,242,236,.06); border:1px solid rgba(246,242,236,.2); color:var(--text-hi); padding:12px 14px; border-radius:8px; font-family:var(--font-body); font-size:.95rem;">
-          <button id="free-scan-btn" class="btn btn-primary" style="white-space:nowrap;">Scan Free</button>
+      <div class="h-console" aria-label="Example case being scanned">
+        <div class="h-console-head"><span>Case · astro_domina</span><span class="h-live"><i></i>Scanning</span></div>
+        <div class="h-radar"><canvas id="h-radar" aria-hidden="true"></canvas></div>
+        <div class="h-feed" id="h-feed">
+          <div class="h-feed-row" data-s="found"><span class="h-dot"></span><span class="u">reddit.com/r/leaks/astro_domina</span><span class="h-badge">Leak found</span></div>
+          <div class="h-feed-row" data-s="sent"><span class="h-dot"></span><span class="u">t.me/leaked_creators/4829</span><span class="h-badge">DMCA sent</span></div>
+          <div class="h-feed-row" data-s="removed"><span class="h-dot"></span><span class="u">pirate-tube.xyz/leaks/astro</span><span class="h-badge">Removed</span></div>
+          <div class="h-feed-row" data-s="found"><span class="h-dot"></span><span class="u">google.com · 12 image results</span><span class="h-badge">Leak found</span></div>
         </div>
-        <p id="free-scan-note" style="font-size:.76rem; color:var(--text-low); margin:10px 0 0;">One free scan per visitor. No account needed.</p>
-        <div id="free-scan-results" class="hidden" style="margin-top:16px;"></div>
-      </div>
-
-      <div class="trust-row">
-        <div class="avatar-stack">
-          <span style="background:#0096F5;">JM</span>
-          <span style="background:#22C3A6;">AK</span>
-          <span style="background:#5B8DEF;">RS</span>
-          <span style="background:#6B5B95;">+</span>
-        </div>
-        <small>Trusted by creators across dozens of platforms</small>
-      </div>
-      <div class="platform-row">
-        <span class="label">Protection coverage includes</span>
-        <div class="chip-row">
-          <span class="chip">OnlyFans</span>
-          <span class="chip">Fansly</span>
-          <span class="chip">ManyVids</span>
-          <span class="chip">Chaturbate</span>
-          <span class="chip">Reddit</span>
-          <span class="chip">X / Twitter</span>
-          <span class="chip">Instagram</span>
-          <span class="chip">Google Search</span>
-          <span class="chip">Telegram</span>
-          <span class="chip">+ Other</span>
-        </div>
+        <div class="h-console-foot"><span>Illustrative example</span><span><b id="h-actions">1,006</b> automated actions today</span></div>
       </div>
     </div>
+  </section>
 
-    <div class="radar-wrap" aria-hidden="true">
-      <div class="radar-ring r1"></div>
-      <div class="radar-ring r2"></div>
-      <div class="radar-ring r3"></div>
-      <div class="radar-ring r4"></div>
-      <div class="radar-sweep"></div>
-      <div class="radar-ping p1"></div>
-      <div class="radar-ping p2"></div>
-      <div class="radar-ping p3"></div>
-      <div class="radar-core">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-          <path d="M12 2 L21 6 V12 C21 17 17 21 12 22 C7 21 3 17 3 12 V6 Z" stroke="#0096F5" stroke-width="2"/>
-        </svg>
-      </div>
+  <div class="h-ticker" aria-label="Platforms covered">
+    <div class="h-ticker-track" id="h-ticker">
+      <span>OnlyFans</span><span>Fansly</span><span>ManyVids</span><span>Chaturbate</span><span>Reddit</span><span>X / Twitter</span><span>Instagram</span><span>Google Search</span><span>Google Images</span><span>Telegram</span><span>Leak &amp; tube sites</span>
     </div>
   </div>
-</section>
 
-<section class="band-ink-2" id="how-it-works">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">See It In Action</span>
-      <h2>From scan to takedown — fully automated.</h2>
-      <p class="lede">Once your brand profile is set up, SentryVo's agents work continuously in the background. Here's what a live case looks like.</p>
+  <section class="h-block" id="takedowns">
+    <div class="wrap h-cleanup">
+      <div class="h-cleanup-copy rv">
+        <span class="h-label">Takedowns, live</span>
+        <h2 style="margin-top:16px">Watch a search for your name get cleaned up</h2>
+        <p>Each leak is found, sent a DMCA notice, removed by its host and then dropped from the results. Your official pages stay right where fans can find them.</p>
+        <div class="h-legend"><span class="h-badge" data-s="found">Leak found</span><span class="h-badge" data-s="sent">DMCA sent</span><span class="h-badge" data-s="removed">Removed</span></div>
+      </div>
+      <div class="h-browser rv" aria-label="Example: search results being cleaned up">
+        <div class="h-bar"><i></i><i></i><i></i>
+          <div class="h-query"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span id="h-q"></span><span class="h-caret"></span></div>
+        </div>
+        <div class="h-results" id="h-results"></div>
+        <div class="h-browser-foot"><span>Example search · illustrative</span><span>Leaks left: <b id="h-left">4</b></span></div>
+      </div>
     </div>
+  </section>
 
-    <div class="demo-card">
-      <div class="demo-head">
-        <div class="who">
-          <span class="demo-avatar">AD</span>
-          <span>Case: astro_domina</span>
-        </div>
-        <span class="demo-status">Scanning</span>
+  <section class="h-block" id="how-it-works" style="padding-top:0">
+    <div class="wrap">
+      <div class="h-head rv">
+        <div><span class="h-label">How it works · example case</span><h2 style="margin-top:16px">The last 72 hours of a leak</h2></div>
+        <p>This is what happens after a stolen clip is posted. Scroll through it. Every step runs on its own and is logged in your dashboard.</p>
       </div>
+      <div class="h-casefile">
+        <div class="h-clock" aria-hidden="true">
+          <div class="h-clock-top"><span>Case · astro_domina</span><span>Elapsed</span></div>
+          <div class="h-hour"><span id="h-hr">00</span><small>hrs</small></div>
+          <div class="h-track"><i id="h-trk"></i></div>
+          <div><span class="h-badge" id="h-chip" data-s="found">Leak posted</span></div>
+          <p class="h-clock-desc" id="h-cdesc">Someone uploads your content to a tube site and puts your stage name in the title.</p>
+        </div>
+        <div>
+          <article class="h-ev on" data-h="0" data-c="found" data-l="Leak posted"><time>Hour 0</time><div><h3>A clip goes up</h3><p>Someone uploads your content to a tube site and puts your stage name in the title.</p></div></article>
+          <article class="h-ev" data-h="6" data-c="found" data-l="Found"><time>Hour 6</time><div><h3>Found in the morning scan</h3><p>The daily scan searches Google web and images, Telegram and known leak sites for every alias you track.</p></div></article>
+          <article class="h-ev" data-h="7" data-c="found" data-l="Verified"><time>Hour 7</time><div><h3>Checked before reporting</h3><p>The page names you in its address or title, or matches one of your photo fingerprints. Your own pages are always skipped.</p></div></article>
+          <article class="h-ev" data-h="8" data-c="sent" data-l="Host identified"><time>Hour 8</time><div><h3>Real host identified</h3><p>We look up the hosting provider and domain registrar to find an abuse contact that can actually remove it.</p></div></article>
+          <article class="h-ev" data-h="9" data-c="sent" data-l="DMCA sent"><time>Hour 9</time><div><h3>DMCA notice sent</h3><p>The notice goes to the host without your personal details. Reddit, X and Instagram links go through their official copyright forms instead.</p></div></article>
+          <article class="h-ev" data-h="48" data-c="removed" data-l="Removed"><time>Hour 48</time><div><h3>Host takes it down</h3><p>The daily recheck sees the page is gone and marks the leak as removed.</p></div></article>
+          <article class="h-ev" data-h="72" data-c="removed" data-l="Delisted"><time>Hour 72</time><div><h3>Cleared from Google too</h3><p>Your report links to Google's removal tool, so the dead result drops out of search as well.</p></div></article>
+        </div>
+      </div>
+    </div>
+  </section>
 
-      <div class="demo-row" data-demo-row>
-        <div class="site"><span class="dot found"></span> reddit.com/r/leaks/astro_domina</div>
-        <span class="badge found">Leak Found</span>
+  <section class="h-block" id="before-after" style="padding-top:0">
+    <div class="wrap">
+      <div class="h-head rv">
+        <div><span class="h-label">Before / after</span><h2 style="margin-top:16px">What fans find when they search your name</h2></div>
+        <p>Drag the handle. On the left, search results on day one. On the right, the same search a few weeks into protection.</p>
       </div>
-      <div class="demo-row" data-demo-row>
-        <div class="site"><span class="dot sent"></span> t.me/leaked_creators/4829</div>
-        <span class="badge sent">DMCA Sent</span>
+      <div class="h-compare rv" id="h-compare">
+        <div class="h-pane">
+          <div class="h-pane-head"><b>Day 1</b><span class="h-badge" data-s="found">5 leaks</span></div>
+          <div class="h-row"><span>onlyfans.com/astro_domina</span><span class="h-badge" data-s="removed">Official</span></div>
+          <div class="h-row"><span>pirate-tube.xyz/leaks/astro-domina-full</span><span class="h-badge" data-s="found">Leak</span></div>
+          <div class="h-row"><span>t.me/leaked_creators/4829</span><span class="h-badge" data-s="found">Leak</span></div>
+          <div class="h-row"><span>reddit.com/r/leaks/astro_domina</span><span class="h-badge" data-s="found">Leak</span></div>
+          <div class="h-row"><span>leakhub.cc/astro_domina/gallery</span><span class="h-badge" data-s="found">Leak</span></div>
+          <div class="h-row"><span>forum.vip/thread/astro-domina-mega</span><span class="h-badge" data-s="found">Leak</span></div>
+        </div>
+        <div class="h-pane after" aria-hidden="true">
+          <div class="h-pane-head"><b>Week 4</b><span class="h-badge" data-s="removed">4 removed</span></div>
+          <div class="h-row"><span>onlyfans.com/astro_domina</span><span class="h-badge" data-s="removed">Official</span></div>
+          <div class="h-row"><span>x.com/astro_domina</span><span class="h-badge" data-s="removed">Official</span></div>
+          <div class="h-row"><span class="ghost">Result removed after a copyright notice</span><span class="h-badge" data-s="removed">Removed</span></div>
+          <div class="h-row"><span class="ghost">Result removed after a copyright notice</span><span class="h-badge" data-s="removed">Removed</span></div>
+          <div class="h-row"><span>forum.vip/thread/astro-domina-mega</span><span class="h-badge" data-s="sent">DMCA sent</span></div>
+          <div class="h-row"><span class="ghost">Result removed after a copyright notice</span><span class="h-badge" data-s="removed">Removed</span></div>
+        </div>
+        <span class="h-handle" aria-hidden="true"></span>
+        <input type="range" id="h-cmp" min="0" max="100" value="50" aria-label="Compare day 1 with week 4">
       </div>
-      <div class="demo-row" data-demo-row>
-        <div class="site"><span class="dot removed"></span> pirate-tube.xyz/leaks/astro</div>
-        <span class="badge removed">Removed</span>
-      </div>
-      <div class="demo-row" data-demo-row>
-        <div class="site"><span class="dot found"></span> google.com — 12 image results</div>
-        <span class="badge found">Leak Found</span>
-      </div>
+      <p class="h-note">Illustrative example. Results depend on each host and platform.</p>
+    </div>
+  </section>
 
-      <div class="demo-footer">
-        <span>1,006 automated actions run daily across all cases</span>
-        <span>Illustrative example</span>
+  <section class="h-block" id="features" style="padding-top:0">
+    <div class="wrap">
+      <div class="h-head rv">
+        <div><span class="h-label">Everything included</span><h2 style="margin-top:16px">One subscription. Every tool.</h2></div>
+        <p>Both plans include everything below. They differ only in how many platforms you protect and how often you get reports.</p>
+      </div>
+      <div class="h-index">
+        <div class="h-ix rv"><h3>Daily scanning</h3><p>Google web and images, Telegram on every scan, Reddit, X and a rotating sweep of known leak and tube sites.</p><span class="arr" aria-hidden="true">→</span></div>
+        <div class="h-ix rv"><h3>Verified matches only</h3><p>A result must name you or match your photos. Unrelated pages are dropped, so you aren't flooded with noise.</p><span class="arr" aria-hidden="true">→</span></div>
+        <div class="h-ix rv"><h3>Photo fingerprints</h3><p>Up to 300 of your photos become 64-bit fingerprints. Resized, watermarked or flipped copies still match. The photos themselves are deleted, and no face data is used.</p><span class="arr" aria-hidden="true">→</span></div>
+        <div class="h-ix rv"><h3>Real takedowns</h3><p>The notice goes to the actual hosting provider's abuse contact, and the link is rechecked until it's gone.</p><span class="arr" aria-hidden="true">→</span></div>
+        <div class="h-ix rv"><h3>Your pages protected</h3><p>The official pages you list at signup are never reported, including their image servers.</p><span class="arr" aria-hidden="true">→</span></div>
+        <div class="h-ix rv"><h3>Reports &amp; dashboard</h3><p>Every link and its status, daily or every 3 days, with an Excel export of your full history and a link to Google's removal tool.</p><span class="arr" aria-hidden="true">→</span></div>
+      </div>
+      <div class="h-odo-row rv" id="h-odos">
+        <div class="h-odo-cell"><div class="h-odo" data-n="24">24</div><small>Hours a day monitored</small></div>
+        <div class="h-odo-cell"><div class="h-odo" data-n="300">300</div><small>Photo fingerprints per client</small></div>
+        <div class="h-odo-cell"><div class="h-odo" data-n="64">64</div><small>Bits per fingerprint</small></div>
+        <div class="h-odo-cell"><div class="h-odo" data-n="5">5</div><small>Bits that may differ in a match</small></div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="features">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">Everything You Need</span>
-      <h2>One subscription. Your entire protection stack.</h2>
-      <p class="lede">Beyond takedowns — SentryVo learns your brand, watches for new leaks, and keeps fans pointed at your real profiles.</p>
+  <section class="h-block h-pricing" id="pricing">
+    <div class="wrap">
+      <div class="h-head rv">
+        <div><span class="h-label">Pricing</span><h2 style="margin-top:16px">Two plans. No contract.</h2></div>
+        <p>Your first month is 40% off either plan. Cancel from your dashboard whenever you like.</p>
+      </div>
+      <div class="h-switch" role="group" aria-label="Show price for">
+        <button type="button" id="h-p-first" aria-pressed="true">First month</button>
+        <button type="button" id="h-p-then" aria-pressed="false">From month 2</button>
+      </div>
+      <div class="h-tickets">
+        <div class="h-ticket rv">
+          <div class="t-top">
+            <span class="t-name">Single Keyword/Account</span>
+            <div class="h-price"><span>$</span><div class="h-odo" data-price data-a="30" data-b="50">30</div><span class="per" data-per>first month</span></div>
+            <p class="t-sub">For creators on one platform, for example just OnlyFans.</p>
+          </div>
+          <div class="h-perf"></div>
+          <div class="t-body">
+            <ul>
+              <li>Daily scanning of web and Google Images</li>
+              <li>Photo fingerprint matching</li>
+              <li>Automated DMCA takedowns</li>
+              <li>Reddit, Telegram, X and leak-site monitoring</li>
+              <li>Detailed report every 3 days</li>
+              <li>Live case dashboard</li>
+            </ul>
+            <a class="btn" href="register.html?plan=single">Get protected <span class="ar">→</span></a>
+          </div>
+        </div>
+        <div class="h-ticket best rv">
+          <span class="h-stub">Best value</span>
+          <div class="t-top">
+            <span class="t-name">Multiple Keywords/Accounts</span>
+            <div class="h-price"><span>$</span><div class="h-odo" data-price data-a="60" data-b="100">60</div><span class="per" data-per>first month</span></div>
+            <p class="t-sub">For creators on 2 or more platforms, like OnlyFans, Chaturbate and Pornhub.</p>
+          </div>
+          <div class="h-perf"></div>
+          <div class="t-body">
+            <ul>
+              <li>Everything in Single</li>
+              <li>Coverage across all your platforms</li>
+              <li>Daily detailed report</li>
+              <li>Priority takedown attempts</li>
+              <li>Unlimited stage names</li>
+            </ul>
+            <a class="btn" href="register.html?plan=multi">Get protected <span class="ar">→</span></a>
+          </div>
+        </div>
+      </div>
+      <p class="h-proof rv">To sign up, you share links to your own original content as proof of ownership, never the leaked link. Our daily scans find the copies for you. Run an agency? <a href="agencies.html" style="color:var(--rust);font-weight:600">See agency plans</a>.</p>
     </div>
-    <div class="grid-5">
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#0096F5" stroke-width="2"/><path d="M21 21 L16 16" stroke="#0096F5" stroke-width="2" stroke-linecap="round"/></svg>
-        </div>
-        <h3>AI-Powered Scanning</h3>
-        <p>Continuous sweeps across search engines, forums, tube sites and messaging apps.</p>
-        <ul>
-          <li>Daily scans across your platforms</li>
-          <li>Web and Google Images search</li>
-          <li>Username and alias matching</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="#22C3A6" stroke-width="2"/></svg>
-        </div>
-        <h3>Automated Takedowns</h3>
-        <p>We identify the actual hosting provider and file a DMCA notice — not just a generic contact form.</p>
-        <ul>
-          <li>Real hosting-provider lookup, not guesswork</li>
-          <li>Auto-filed notices to the right abuse contact</li>
-          <li>Removal status rechecked automatically</li>
-          <li>Major platforms are routed to their own official copyright forms</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 12 L9 12 L11 6 L14 18 L16 12 L21 12" stroke="#5B8DEF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <h3>Your Own Content, Protected</h3>
-        <p>List every official platform you post on, and we make sure it's never mistaken for a leak.</p>
-        <ul>
-          <li>Add all your official pages at signup</li>
-          <li>Your own content is never flagged or reported</li>
-          <li>Works across every platform you list</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#0096F5" stroke-width="2"/><path d="M4 21 C4 16 8 14 12 14 C16 14 20 16 20 21" stroke="#0096F5" stroke-width="2"/></svg>
-        </div>
-        <h3>Multi-Alias Tracking</h3>
-        <p>Monitor as many stage names and aliases as your plan covers, all in one case.</p>
-        <ul>
-          <li>Track multiple aliases at once</li>
-          <li>Add a custom platform if yours isn't listed</li>
-          <li>Single plan covers 1 platform, Multi covers unlimited</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="14" rx="2" stroke="#22C3A6" stroke-width="2"/><path d="M3 9 H21" stroke="#22C3A6" stroke-width="2"/></svg>
-        </div>
-        <h3>Live Case Dashboard</h3>
-        <p>Every scan, notice and removal logged in real time — see exactly what's happening.</p>
-        <ul>
-          <li>Daily activity &amp; status log</li>
-          <li>Full leak history, exportable to Excel</li>
-          <li>Downloadable takedown history</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="#5B8DEF" stroke-width="2"/><path d="M9 12 L11 14 L15 10" stroke="#5B8DEF" stroke-width="2" stroke-linecap="round"/></svg>
-        </div>
-        <h3>Reports on Your Schedule</h3>
-        <p>A full breakdown of what was found, reported, and removed — sent automatically.</p>
-        <ul>
-          <li>Every link, with its current status</li>
-          <li>Delivered daily or every 3 days, by plan</li>
-          <li>Confidential handling of your data</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="#22C3A6" stroke-width="2"/><path d="M9 12 L11 14 L15 10" stroke="#22C3A6" stroke-width="2" stroke-linecap="round"/></svg>
-        </div>
-        <h3>Verified Matches Only</h3>
-        <p>Every link is checked before it is reported, so you are not flooded with unrelated pages.</p>
-        <ul>
-          <li>A result must contain your name or alias, or match your photos</li>
-          <li>Unrelated results are dropped, not reported</li>
-          <li>Fewer false alarms, safer takedowns</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 4 L3 11 L10 13 L12 20 L15 15 L19 18 Z" stroke="#0096F5" stroke-width="2" stroke-linejoin="round"/></svg>
-        </div>
-        <h3>Telegram &amp; Leak-Site Coverage</h3>
-        <p>Leaks often start in channels and on known leak sites, not just in search results.</p>
-        <ul>
-          <li>Telegram searched on every scan</li>
-          <li>Rotating sweeps of known leak and tube sites</li>
-          <li>Reddit and X / Twitter included</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#5B8DEF" stroke-width="2"/><path d="M21 21 L16 16" stroke="#5B8DEF" stroke-width="2" stroke-linecap="round"/><path d="M8 11 H14" stroke="#5B8DEF" stroke-width="2" stroke-linecap="round"/></svg>
-        </div>
-        <h3>Google Delisting Ready</h3>
-        <p>Remove leaks from Google results as well as from the host.</p>
-        <ul>
-          <li>Direct link to Google’s removal tool in every report</li>
-          <li>Google removal requests prepared from your confirmed leaks</li>
-          <li>Big platforms (Reddit, X, Instagram and more) get their official copyright form link instead of a generic email</li>
-        </ul>
-      </div>
-      <div class="feature-card" style="grid-column:1 / -1;">
-        <div class="icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#0096F5" stroke-width="2"/><circle cx="9" cy="9" r="1.6" fill="#0096F5"/><path d="M4 18 L10 12 L14 16 L17 13 L20 16" stroke="#0096F5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <h3>Photo Fingerprint Matching</h3>
-        <p>Send us your original photos once. We recognize re-uploads of those exact photos in Google Images results and in the preview images of the pages we find — even when they've been resized, compressed, watermarked or flipped — and mark each one <strong>Verified match</strong> in your reports.</p>
-        <ul>
-          <li>Your photos are never stored — only a short, irreversible fingerprint of each</li>
-          <li>Not facial recognition: no face data or biometrics are used</li>
-          <li>Matches copies of the photos you provide — add new ones any time (up to 300)</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
+  </section>
 
-<section class="band-paper">
-  <div class="wrap">
-    <div class="stats-grid">
-      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line);">
-        <b style="color:var(--rust-dark);">Daily</b>
-        <span style="color:var(--text-mid);">Scan Frequency</span>
-      </div>
-      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line);">
-        <b style="color:var(--rust-dark);">Any</b>
-        <span style="color:var(--text-mid);">Platform, Built-in or Custom</span>
-      </div>
-      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line);">
-        <b style="color:var(--rust-dark);">24/7</b>
-        <span style="color:var(--text-mid);">Automated Monitoring</span>
-      </div>
-      <div class="stat-card" style="background:var(--paper-2); border-color:var(--line);">
-        <b style="color:var(--rust-dark);">Free</b>
-        <span style="color:var(--text-mid);">First Scan, No Account Needed</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">Why It Works This Way</span>
-      <h2>Built to be transparent, not just automated.</h2>
-      <p class="lede">Every case is genuinely logged, not a black box — you see exactly what was found, what was reported, and what came down, with a downloadable record of it all.</p>
-    </div>
-    <div class="case-grid">
-      <div class="case-card">
-        <div class="who">
-          <span class="avatar">1</span>
-          <div><strong>Real hosting-provider lookups</strong></div>
+  <section class="h-block" id="faq">
+    <div class="wrap">
+      <div class="h-head rv"><div><span class="h-label">FAQ</span><h2 style="margin-top:16px">Before you get protected</h2></div></div>
+      <div class="h-faq">
+        <div>
+          <details open><summary>How fast are leaks removed?</summary><div class="a"><div><p>Most confirmed leaks trigger an automated DMCA notice within hours of detection. More complex cases, like disputed ownership or unresponsive hosts, are escalated and followed up manually.</p></div></div></details>
+          <details><summary>Which platforms do you cover?</summary><div class="a"><div><p>Scanning covers major creator platforms, social media, search engines, forums and messaging apps, regardless of where your original content is hosted.</p></div></div></details>
+          <details><summary>What if I'm a faceless creator?</summary><div class="a"><div><p>No problem. Detection is based on your stage name, aliases and the specific platforms you're on, not facial recognition. Your face doesn't need to appear in the content for us to find a leak.</p></div></div></details>
+          <details><summary>Can I cancel anytime?</summary><div class="a"><div><p>Yes. There's no long-term contract. Cancel from your dashboard whenever you like.</p></div></div></details>
         </div>
-        <p style="margin-top:10px; font-size:.88rem;">We identify the actual host behind a leak — not just a generic contact form — so notices reach someone who can actually act.</p>
-      </div>
-      <div class="case-card">
-        <div class="who">
-          <span class="avatar">2</span>
-          <div><strong>Your own content, never flagged</strong></div>
+        <div>
+          <details><summary>Do you store my photos?</summary><div class="a"><div><p>No. If you send us original photos for fingerprint matching, each one is converted into a short fingerprint and the photo itself is discarded. The fingerprint can't be turned back into the image.</p></div></div></details>
+          <details><summary>Is this facial recognition?</summary><div class="a"><div><p>No. Fingerprint matching compares the photo itself, not faces, so it only recognizes copies of the specific photos you provide, including resized, compressed, watermarked or flipped versions. It doesn't identify people and uses no biometric data.</p></div></div></details>
+          <details><summary>Will my identity stay private?</summary><div class="a"><div><p>Your personal information is never included in the public-facing DMCA notice, and account data is kept confidential and encrypted.</p></div></div></details>
+          <details><summary>What is a DMCA takedown service?</summary><div class="a"><div><p>It's a service that files copyright removal requests on your behalf under the Digital Millennium Copyright Act, so you don't have to track down and report every instance of stolen content yourself.</p></div></div></details>
         </div>
-        <p style="margin-top:10px; font-size:.88rem;">List your official platforms at signup, and they're automatically excluded from ever being reported as a leak.</p>
-      </div>
-      <div class="case-card">
-        <div class="who">
-          <span class="avatar">3</span>
-          <div><strong>A full, exportable record</strong></div>
-        </div>
-        <p style="margin-top:10px; font-size:.88rem;">Every report includes an Excel export with every link found, its status, and what happened next — not just a summary.</p>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="band-ink-2" id="pricing">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">Pricing</span>
-      <h2>One subscription. Zero leaks. All tools.</h2>
-      <p class="lede">Simple, flat monthly pricing based on how many platforms you're protecting. No long-term contract — cancel any time from your dashboard.</p>
+  <section class="h-final">
+    <div class="wrap">
+      <span class="h-label">Start free</span>
+      <h2>Find out what's out there today</h2>
+      <p>Your first scan is free and takes a few seconds. No account, no card.</p>
+      <a class="btn btn-primary" href="#top">Run my free scan <span class="ar">→</span></a>
     </div>
-    <div class="pricing-grid">
-      <div class="plan">
-        <h3>Single Keyword/Account</h3>
-        <div class="price">$30<small>/mo first order</small></div>
-        <p style="font-size:.82rem; color:var(--text-low); margin:-6px 0 0;">then $50/mo</p>
-        <p>For creators active on one platform — e.g. just OnlyFans.</p>
-        <ul>
-          <li>Daily AI scanning (web + Google Images)</li>
-          <li>Photo fingerprint matching of your originals (Google Images + result pages)</li>
-          <li>Automated DMCA takedown attempts</li>
-          <li>Verified matches only: name or photo match required</li>
-          <li>Direct link to Google's removal tool in every report</li>
-          <li>Reddit, Telegram, X &amp; known leak-site monitoring</li>
-          <li>Detailed report every 3 days</li>
-          <li>Live case dashboard</li>
-        </ul>
-        <a href="register.html?plan=single" class="btn btn-primary btn-block">Get Protected</a>
-      </div>
-      <div class="plan featured">
-        <span class="ribbon">Best Value</span>
-        <h3>Multiple Keywords/Accounts</h3>
-        <div class="price">$60<small>/mo first order</small></div>
-        <p style="font-size:.82rem; color:var(--text-low); margin:-6px 0 0;">then $100/mo</p>
-        <p>For creators active on 2+ platforms — e.g. OnlyFans, Chaturbate, and PornHub together.</p>
-        <ul>
-          <li>Everything in Single Keyword/Account</li>
-          <li>Coverage across all your platforms</li>
-          <li>Daily detailed report (not every 3 days)</li>
-          <li>Priority takedown attempts</li>
-          <li>Unlimited stage names</li>
-        </ul>
-        <a href="register.html?plan=multi" class="btn btn-teal btn-block">Get Protected</a>
-      </div>
-    </div>
-    <p style="margin-top:22px; font-size:.85rem; color:var(--text-low);">To sign up, you provide links to <strong>your own</strong> original content as proof of ownership — never the infringing link. Our daily scans find the leaked copies for you.</p>
-  </div>
-</section>
-
-<section class="band-ink-2">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">Frequently Asked Questions</span>
-      <h2>Before you get protected.</h2>
-    </div>
-    <div class="faq-list">
-      <div class="faq-item open">
-        <button class="faq-q">How fast are leaks removed?<span class="plus">+</span></button>
-        <div class="faq-a"><p>Most confirmed leaks trigger an automated DMCA notice within hours of detection. More complex cases — disputed ownership, unresponsive hosts — are escalated and followed up manually.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Which platforms do you cover?<span class="plus">+</span></button>
-        <div class="faq-a"><p>Scanning covers major creator platforms, social media, search engines, forums and messaging apps, regardless of where your original content is hosted.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What if I'm a faceless creator?<span class="plus">+</span></button>
-        <div class="faq-a"><p>No problem — detection is based on your stage name, aliases, and the specific platforms you're on, not facial recognition. Your face appearing in the content isn't required for us to find a leak.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Do you store my photos?<span class="plus">+</span></button>
-        <div class="faq-a"><p>No. If you send us original photos for fingerprint matching, each one is converted into a short fingerprint and the photo itself is discarded. The fingerprint can't be turned back into the image.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Is this facial recognition?<span class="plus">+</span></button>
-        <div class="faq-a"><p>No. Fingerprint matching compares the photo itself, not faces, so it only recognizes copies of the specific photos you provide — including resized, compressed, watermarked or flipped versions. It doesn't identify people and uses no biometric data.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Can I cancel anytime?<span class="plus">+</span></button>
-        <div class="faq-a"><p>Yes. There's no long-term contract — cancel from your dashboard whenever you like.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Will my identity stay private?<span class="plus">+</span></button>
-        <div class="faq-a"><p>Your personal information is never included in the public-facing DMCA notice, and account data is kept confidential and encrypted.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What is a DMCA takedown service?<span class="plus">+</span></button>
-        <div class="faq-a"><p>It's a service that files copyright removal requests on your behalf under the Digital Millennium Copyright Act, so you don't have to track down and report every instance of stolen content yourself.</p></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <div class="cta-band">
-      <h2>Ready to stop the leaks?</h2>
-      <p class="lede" style="margin:0 auto 26px;">Start with a free scan — see what's already out there before you commit to anything.</p>
-      <a href="#pricing" class="btn btn-primary btn-lg">Get Protected</a>
-    </div>
-  </div>
-</section>
+    <div class="h-big-mq" aria-hidden="true"><div id="h-bigmq"><span>Found</span><span>Reported</span><span>Removed</span><span>Found</span><span>Reported</span><span>Removed</span></div></div>
+  </section>
+</main>
 
 <footer class="site-footer">
   <div class="wrap">
@@ -600,5 +425,6 @@
 </footer>
 
 <script src="script.js"></script>
+<script src="home.js"></script>
 </body>
 </html>

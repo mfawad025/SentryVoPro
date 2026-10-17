@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .fg { stroke: #1A1530; } .dot { fill: #1A1530; } .acc { fill: #D82F74; }
+    @media (prefers-color-scheme: dark) { .fg { stroke: #EFEAF7; } .dot { fill: #EFEAF7; } .acc { fill: #FF5A9D; } }
+  </style>
+  <circle class="fg" cx="32" cy="32" r="26" fill="none" stroke-width="5.5"/>
+  <circle class="fg" cx="32" cy="32" r="14.5" fill="none" stroke-width="4.5" opacity=".35"/>
+  <path class="acc" d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z"/>
+  <circle class="dot" cx="46" cy="42" r="3.6"/>
+  <circle class="acc" cx="32" cy="32" r="5.5"/>
+</svg>

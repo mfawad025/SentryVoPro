@@ -6,7 +6,8 @@
 <title>Agency Dashboard — SentryVo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="icon" type="image/png" href="assets/logo-icon.png">
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="style.css">
@@ -16,9 +17,9 @@
 <div class="dash-shell">
   <aside class="dash-sidebar">
     <a href="index.html" class="logo">
-      <img src="assets/logo-nav.png" alt="SentryVo — Protect What You Create" loading="eager">
+      <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="currentColor" stroke-width="4" opacity=".35"/><g class="sweep"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" style="fill:var(--rust)"/></g><circle cx="46" cy="42" r="3.2" fill="currentColor"/><circle cx="32" cy="32" r="5" style="fill:var(--rust)"/></svg><span>SentryVo</span>
     </a>
-    <div id="sidebar-agency-info" style="margin-top:auto; padding:14px; background:var(--ink-3); border-radius:10px; font-size:.82rem; color:var(--text-mid);">
+    <div id="sidebar-agency-info" style="margin-top:auto; padding:14px; background:var(--paper-3); border-radius:10px; font-size:.82rem; color:var(--text-mid);">
       Loading agency…
     </div>
     <button id="logout-btn" class="dash-link" style="border:none; background:none; cursor:pointer; text-align:left; width:100%; font-family:inherit;">
@@ -36,11 +37,11 @@
       <a href="index.html" class="btn">Back to Site</a>
     </div>
 
-    <div id="dash-error" class="dash-panel hidden" style="border-color:#0096F5;">
+    <div id="dash-error" class="dash-panel hidden" style="border-color:var(--rust);">
       <p style="margin:0;">Could not load your agency dashboard. <a href="login.html" style="color:var(--rust);">Log in again</a>.</p>
     </div>
 
-    <div id="dash-inactive" class="dash-panel hidden" style="border-color:#0096F5;">
+    <div id="dash-inactive" class="dash-panel hidden" style="border-color:var(--rust);">
       <p style="margin:0;">Your agency subscription isn't active yet. If you just completed checkout, this can take a minute to update — refresh shortly. Otherwise, <a href="register-agency.html" style="color:var(--rust);">complete checkout</a> first.</p>
     </div>
 
@@ -219,7 +220,7 @@
       loadAgencyDashboard(); // refresh the roster table
     } catch (err) {
       statusEl.textContent = err.message;
-      statusEl.style.color = '#0096F5';
+      statusEl.style.color = 'var(--rust)';
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Add to Roster';

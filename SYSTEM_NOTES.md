@@ -43,3 +43,8 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 
 ## Not built yet
 Follow-up/escalation notices, cancellation handling from Lemon Squeezy (`subscription_cancelled/expired/payment_failed` are ignored), twice-daily scans for Multi plan.
+
+## Design (2026-10 redesign)
+- Shared tokens, fonts (Unbounded / Instrument Sans / Martian Mono), buttons and the Radar Sweep logo live in `style.css`; light by default, dark via `prefers-color-scheme`.
+- Homepage-only sections and animations: `home.css` + `home.js` (classes prefixed `h-`). The real free scan still runs through `script.js` (`#free-scan-*` ids).
+- Logo files: `assets/favicon.svg`, `assets/logo-mark.svg`, `assets/logo-icon.png` (512px app icon), `assets/logo-full.png` (1200×630 share image). `logo-nav.png` and `logo-full-trimmed.png` are no longer used.

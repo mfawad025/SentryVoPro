@@ -58,7 +58,7 @@ function initRegisterForm() {
         const otherName = form.querySelector('#single-other-name')?.value.trim();
         const otherLink = form.querySelector('#single-other-link')?.value.trim();
         if (!otherName) {
-          if (statusEl) { statusEl.textContent = 'Enter the name of your platform.'; statusEl.style.color = '#0096F5'; }
+          if (statusEl) { statusEl.textContent = 'Enter the name of your platform.'; statusEl.style.color = 'var(--rust)'; }
           return;
         }
         platforms = [otherName];
@@ -73,7 +73,7 @@ function initRegisterForm() {
         const otherName = form.querySelector('#multi-other-name')?.value.trim();
         const otherLink = form.querySelector('#multi-other-link')?.value.trim();
         if (!otherName) {
-          if (statusEl) { statusEl.textContent = 'Enter the name of your other platform.'; statusEl.style.color = '#0096F5'; }
+          if (statusEl) { statusEl.textContent = 'Enter the name of your other platform.'; statusEl.style.color = 'var(--rust)'; }
           return;
         }
         platforms.push(otherName);
@@ -83,11 +83,11 @@ function initRegisterForm() {
 
     if (!name || !email || !mobile || !password) return;
     if (!platforms.length) {
-      if (statusEl) { statusEl.textContent = 'Select at least one platform.'; statusEl.style.color = '#0096F5'; }
+      if (statusEl) { statusEl.textContent = 'Select at least one platform.'; statusEl.style.color = 'var(--rust)'; }
       return;
     }
     if (plan === 'multi' && platforms.length < 2) {
-      if (statusEl) { statusEl.textContent = 'Select 2 or more platforms for the Multi-Platform plan, or switch to Single Platform.'; statusEl.style.color = '#0096F5'; }
+      if (statusEl) { statusEl.textContent = 'Select 2 or more platforms for the Multi-Platform plan, or switch to Single Platform.'; statusEl.style.color = 'var(--rust)'; }
       return;
     }
 
@@ -122,7 +122,7 @@ function initRegisterForm() {
       console.error('Registration/checkout error:', err);
       if (statusEl) {
         statusEl.textContent = err.message || 'Could not reach the server. Please try again in a moment.';
-        statusEl.style.color = '#0096F5';
+        statusEl.style.color = 'var(--rust)';
       }
       submitBtn.disabled = false;
       submitBtn.textContent = 'Continue to Checkout';
@@ -157,7 +157,7 @@ function initFreeScan() {
     const alias = input.value.trim();
     if (alias.length < 2) {
       resultsBox.classList.remove('hidden');
-      resultsBox.innerHTML = `<p style="color:#0096F5; font-size:.85rem; margin:0;">Enter a name or username to scan.</p>`;
+      resultsBox.innerHTML = `<p style="color:var(--rust); font-size:.85rem; margin:0;">Enter a name or username to scan.</p>`;
       return;
     }
 
@@ -180,7 +180,7 @@ function initFreeScan() {
 
       if (!res.ok) {
         if (data.alreadyUsed) used = true;
-        resultsBox.innerHTML = `<p style="color:#0096F5; font-size:.85rem; margin:0;">${escapeHtml(data.error || 'Scan failed — please try again shortly.')}</p>`;
+        resultsBox.innerHTML = `<p style="color:var(--rust); font-size:.85rem; margin:0;">${escapeHtml(data.error || 'Scan failed — please try again shortly.')}</p>`;
         if (data.alreadyUsed) resultsBox.innerHTML += `<a href="register.html" class="btn btn-primary" style="margin-top:14px; display:inline-flex;">Get Full Protection</a>`;
         return;
       }
@@ -215,7 +215,7 @@ function initFreeScan() {
       `;
     } catch (err) {
       console.error('Free scan error:', err);
-      resultsBox.innerHTML = `<p style="color:#0096F5; font-size:.85rem; margin:0;">Could not reach the scan server. Please try again in a moment.</p>`;
+      resultsBox.innerHTML = `<p style="color:var(--rust); font-size:.85rem; margin:0;">Could not reach the scan server. Please try again in a moment.</p>`;
     } finally {
       if (used) {
         markUsed();

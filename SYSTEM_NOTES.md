@@ -1,9 +1,20 @@
 # SentryVo — how the system works right now
 
 Keep this file current whenever scanner, reporting or email behaviour changes.
-(Last updated: 2026-10-17)
+(Last updated: 2026-10-18)
 
-## Scanning (server/scanner.js, daily cron 08:00)
+## Scan schedule (server/cron.js + scanner.js)
+- Hourly check (`SCAN_CHECK_CRON`, default `7 * * * *`). A client is scanned when their interval has passed since `users.last_scan_at`: Multiple and agency plans every `SCAN_INTERVAL_HOURS_MULTI` (6) hours, Single every `SCAN_INTERVAL_HOURS_SINGLE` (24). 20-minute grace. Runs never overlap.
+- `/api/scan/run-now` and `npm run scan-now` scan everyone regardless of schedule.
+- Admin digest: once a day, after the first check at or after `ADMIN_DIGEST_HOUR` (8, server time).
+- Report emails are unchanged (plan cadence via `report_frequency_days`).
+
+## Reverse image search (Google Lens)
+- Once a day per client (`users.last_lens_at`), up to `LENS_IMAGES_PER_DAY` (4) of their photos go to Serper `/lens`, rotating through the list daily.
+- Photos: `reference_images` table (admin: `GET /api/admin/reference-images?userId=`, `POST .../add?userId=` body `{urls:[...]}`, `GET .../clear?userId=`, all with the admin key) plus the preview images of the client's first 3 original links.
+- A result is kept only if it names an alias in URL/title, or its thumbnail matches the searched photo or a stored fingerprint (dHash, <= 5 bits). Saved with `source = 'serper_lens'`, shown as "Reverse image", included in the admin digest. Not facial recognition.
+
+## Scanning (server/scanner.js)
 - Serper.dev Google search, `num: 100` (paid credits). Text queries per alias, plus Telegram (`t.me`) and a rotating slice of known leak sites. Image queries on Google Images.
 - **Relevance rules**
   - Web results: alias must be in the page URL or title (NOT Google's snippet). Matching ignores spaces, dashes, underscores, case; each field checked separately.
@@ -41,8 +52,14 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 - Login/reset: 10 attempts per 15 min per IP. Register/forgot-password: 10 per hour per IP. Passwords min 6 characters everywhere.
 - Dashboards, agency dashboard, free-scan results and report emails escape all scraped text and only link `http(s)` URLs.
 
+## Billing (Lemon Squeezy webhook)
+- Every `subscription_*` event updates the account from the subscription's status: active / on_trial / past_due / cancelled keep `users.status = 'active'` (cancelled keeps scanning until `subscription_ends_at`); paused -> 'paused'; expired / unpaid -> 'expired'. Only 'active' accounts are scanned.
+- Account found by `custom_data.user_id` (checkout_ref) or by `ls_subscription_id`. Agency owner changes are applied to their creators too.
+- Invoice events (`subscription_payment_*`) are logged only; Lemon Squeezy follows up with `subscription_updated`.
+- Subscribe the webhook to: order_created, subscription_created, subscription_updated, subscription_cancelled, subscription_resumed, subscription_expired, subscription_paused, subscription_unpaused.
+
 ## Not built yet
-Follow-up/escalation notices, cancellation handling from Lemon Squeezy (`subscription_cancelled/expired/payment_failed` are ignored), twice-daily scans for Multi plan.
+Follow-up/escalation notices, impersonator (fake account) search, managed top plan.
 
 ## Design (2026-10 redesign)
 - Shared tokens, fonts (Unbounded / Instrument Sans / Martian Mono), buttons and the Radar Sweep logo live in `style.css`; light by default, dark via `prefers-color-scheme`.

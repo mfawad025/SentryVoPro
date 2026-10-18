@@ -66,28 +66,48 @@ app.post(
       const event = JSON.parse(req.body.toString('utf8'));
       const eventName = event?.meta?.event_name;
       const checkoutRef = event?.meta?.custom_data?.user_id;
-      const subscriptionId = event?.data?.type === 'subscriptions' ? event.data.id : null;
+      const isSubscription = event?.data?.type === 'subscriptions';
+      const subscriptionId = isSubscription ? String(event.data.id) : null;
 
-      if (!checkoutRef) {
-        console.warn('Lemon Squeezy webhook missing custom_data.user_id — cannot link to a user', eventName);
-        return res.status(200).json({ received: true, note: 'no user_id in custom_data' });
+      // Find the account: by the checkout reference we passed to Lemon
+      // Squeezy, or else by the subscription id saved on activation.
+      let user = checkoutRef ? await db.getUserByCheckoutRef(String(checkoutRef)) : null;
+      if (!user && subscriptionId) user = await db.getUserBySubscriptionId(subscriptionId);
+      if (!user) {
+        console.warn(`Lemon Squeezy webhook ${eventName}: no matching account (checkout_ref ${checkoutRef || '-'}, subscription ${subscriptionId || '-'})`);
+        return res.status(200).json({ received: true, note: 'no matching account' });
       }
 
-      if (eventName === 'order_created' || eventName === 'subscription_created') {
-        await db.setUserActiveByCheckoutRef(String(checkoutRef), subscriptionId);
-        console.log(`Activated user (checkout_ref ${checkoutRef}) via ${eventName}`);
+      if (eventName === 'order_created') {
+        await db.setUserActiveByCheckoutRef(user.checkout_ref, null);
+        console.log(`Activated ${user.email} via order_created`);
+      } else if (isSubscription && eventName.startsWith('subscription_')) {
+        // Every subscription_* event carries the subscription's current
+        // status, so one mapping covers created, updated, cancelled,
+        // resumed, expired, paused and unpaused.
+        const attrs = event.data.attributes || {};
+        const lsStatus = attrs.status;
+        const status = accountStatusFor(lsStatus);
+        await db.setSubscriptionState(user.id, {
+          status,
+          lsStatus,
+          endsAt: lsStatus === 'cancelled' ? attrs.ends_at : null,
+          subscriptionId,
+        });
+        if (user.role === 'agency_owner' && user.agency_id) {
+          await db.setAgencyMembersStatus(user.agency_id, status);
+        }
+        console.log(`${eventName}: ${user.email} is now ${status} (Lemon Squeezy status: ${lsStatus})`);
 
         // Subscription events include a "manage your subscription" portal
-        // link — capture it if present so the dashboard's Billing tab can
-        // link straight there. Not present on order_created for one-time
-        // orders, so this is best-effort and gracefully absent otherwise.
-        const portalUrl = event?.data?.attributes?.urls?.customer_portal;
-        if (portalUrl) {
-          const user = await db.getUserByEmail(event?.data?.attributes?.user_email || '');
-          if (user) await db.setCustomerPortalUrl(user.id, portalUrl);
-        }
+        // link — saved so the dashboard's Billing tab can link straight there.
+        const portalUrl = attrs.urls?.customer_portal;
+        if (portalUrl) await db.setCustomerPortalUrl(user.id, portalUrl);
       } else {
-        console.log(`Lemon Squeezy webhook received: ${eventName} (no action taken)`);
+        // Invoice events (subscription_payment_failed/_success/_recovered)
+        // need no action here: Lemon Squeezy retries a failed payment and
+        // then sends subscription_updated with past_due or unpaid.
+        console.log(`Lemon Squeezy webhook received: ${eventName} for ${user.email} (no action taken)`);
       }
 
       res.status(200).json({ received: true });
@@ -99,6 +119,25 @@ app.post(
     }
   }
 );
+
+// Maps a Lemon Squeezy subscription status to the account status the
+// scanner obeys. A cancelled subscription keeps scanning until its paid
+// period ends (Lemon Squeezy then sends subscription_expired). past_due
+// keeps scanning while Lemon Squeezy retries the payment; once the retries
+// fail it becomes unpaid and scanning stops.
+function accountStatusFor(lsStatus) {
+  switch (lsStatus) {
+    case 'active':
+    case 'on_trial':
+    case 'past_due':
+    case 'cancelled':
+      return 'active';
+    case 'paused':
+      return 'paused';
+    default: // 'expired', 'unpaid', or anything unknown
+      return 'expired';
+  }
+}
 
 // ---------------- Content fingerprints (admin) ----------------
 // Usage: POST https://api.sentryvo.com/api/admin/fingerprint/add?key=ADMIN_KEY&userId=ID
@@ -716,7 +755,7 @@ app.get('/api/scan/run-now', async (req, res) => {
   if (!checkAdminKey(req, res)) return;
   try {
     const { runDailyScanForAllUsers } = require('./scanner');
-    const results = await runDailyScanForAllUsers();
+    const results = await runDailyScanForAllUsers({ force: true });
     res.json({ ok: true, usersScanned: results.length });
   } catch (err) {
     console.error('Manual scan trigger failed:', err.message);
@@ -729,7 +768,7 @@ app.post('/api/scan/run-now', async (req, res) => {
   if (!checkAdminKey(req, res)) return;
   try {
     const { runDailyScanForAllUsers } = require('./scanner');
-    const results = await runDailyScanForAllUsers();
+    const results = await runDailyScanForAllUsers({ force: true });
     res.json({ ok: true, usersScanned: results.length });
   } catch (err) {
     console.error('Manual scan trigger failed:', err.message);
@@ -876,6 +915,49 @@ app.post('/api/admin/google-delist/mark', async (req, res) => {
 });
 
 // Usage: https://api.sentryvo.com/api/admin/fingerprint/count?userId=ID&key=YOUR_ADMIN_KEY
+// ---------------- Reference images for reverse image search (admin) ----------------
+// Public URLs of a client's own photos, searched daily with Google Lens
+// (scanner.js runReverseImageSearch). The preview images of their official
+// pages are used automatically; add more here.
+// Usage: GET  /api/admin/reference-images?userId=ID&key=KEY          (list)
+//        POST /api/admin/reference-images/add?userId=ID&key=KEY      body { "urls": ["https://..."] }
+//        GET  /api/admin/reference-images/clear?userId=ID&key=KEY    (remove all)
+app.get('/api/admin/reference-images', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  const userId = Number(req.query.userId);
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  res.json({ userId, urls: await db.getReferenceImages(userId) });
+});
+
+app.post('/api/admin/reference-images/add', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const userId = Number(req.query.userId);
+    const user = userId ? await db.getUserById(userId) : null;
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const outcome = { added: 0, skipped: [] };
+    for (const raw of urls.slice(0, db.MAX_REFERENCE_IMAGES_PER_USER)) {
+      const url = String(raw || '').trim();
+      if (!/^https:\/\/[^\s]+$/i.test(url)) { outcome.skipped.push({ url, reason: 'must be a public https:// image URL' }); continue; }
+      const r = await db.addReferenceImage(userId, url);
+      if (r === 'added') outcome.added++;
+      else outcome.skipped.push({ url, reason: r === 'limit' ? `limit of ${db.MAX_REFERENCE_IMAGES_PER_USER} reached` : 'already added' });
+    }
+    res.json({ ok: true, ...outcome, total: (await db.getReferenceImages(userId)).length });
+  } catch (err) {
+    console.error('Reference image add error:', err.message);
+    res.status(500).json({ error: 'Could not save reference images' });
+  }
+});
+
+app.get('/api/admin/reference-images/clear', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  const userId = Number(req.query.userId);
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  res.json({ ok: true, removed: await db.clearReferenceImages(userId) });
+});
+
 app.get('/api/admin/fingerprint/count', async (req, res) => {
   if (!checkAdminKey(req, res)) return;
   try {

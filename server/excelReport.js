@@ -22,6 +22,12 @@
 const ExcelJS = require('exceljs');
 const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform, getMajorPlatformReportLink } = require('./constants');
 
+function sourceLabel(source) {
+  if (source === 'serper_image') return 'Google Images';
+  if (source === 'serper_lens') return 'Reverse image';
+  return 'Web';
+}
+
 function addLeaksSheet(workbook, title, leaks, extraColumns = []) {
   const sheet = workbook.addWorksheet(title);
   sheet.columns = [
@@ -37,7 +43,7 @@ function addLeaksSheet(workbook, title, leaks, extraColumns = []) {
     const row = {
       alias: leak.matched_alias || '',
       url: leak.url,
-      source: leak.source === 'serper_image' ? 'Google Images' : 'Web',
+      source: sourceLabel(leak.source),
       status: leak.status,
       foundAt: leak.found_at || '',
     };
@@ -68,7 +74,7 @@ async function buildLeakExcelBuffer(user, leaks, summary) {
     allSheet.addRow({
       alias: leak.matched_alias || '',
       url: leak.url,
-      source: leak.source === 'serper_image' ? 'Google Images' : 'Web',
+      source: sourceLabel(leak.source),
       hosting: leak.hosting_provider || 'Unknown (RDAP had no data)',
       status: leak.status,
       foundAt: leak.found_at || '',
@@ -99,7 +105,7 @@ async function buildLeakExcelBuffer(user, leaks, summary) {
   });
 
   // ---- Tab 4: Manual Review — Google Images (non-major-platform image leaks) ----
-  const imageLeaks = leaks.filter((l) => l.source === 'serper_image' && !isMajorPlatform(l.url));
+  const imageLeaks = leaks.filter((l) => (l.source === 'serper_image' || l.source === 'serper_lens') && !isMajorPlatform(l.url));
   const imageSheet = addLeaksSheet(workbook, 'Manual Review - Google Images', imageLeaks, [
     { header: 'Submit Here to Delist', key: 'googleLink', width: 45 },
   ]);

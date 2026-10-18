@@ -218,6 +218,10 @@
   let cachedSummary = null;
   let cachedLeaks = [];
 
+  function sourceLabel(source) {
+    return source === 'serper_image' ? 'Google Images' : source === 'serper_lens' ? 'Reverse image' : 'Web';
+  }
+
   function statusBadgeHtml(status) {
     const labels = { found: 'Leak Found', reported: 'DMCA Sent', removed: 'Removed', manual_review: 'Manual Review' };
     return `<span class="badge ${escapeAttr(status)}">${escapeHtml(labels[status] || status)}</span>`;
@@ -285,7 +289,7 @@
     const rowsEl = document.getElementById('activity-rows');
     rowsEl.innerHTML = recent.length ? recent.map((leak) => `
       <tr>
-        <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
+        <td>${sourceLabel(leak.source)}</td>
         <td><a href="${escapeAttr(safeUrl(leak.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${escapeHtml(leak.url)}</a></td>
         <td>${statusBadgeHtml(leak.status)}</td>
         <td>${new Date(leak.found_at).toLocaleDateString()}</td>
@@ -315,7 +319,7 @@
     const rowsEl = document.getElementById('scans-rows');
     rowsEl.innerHTML = leaks.length ? leaks.map((leak) => `
       <tr>
-        <td>${leak.source === 'serper_image' ? 'Google Images' : 'Web'}</td>
+        <td>${sourceLabel(leak.source)}</td>
         <td><a href="${escapeAttr(safeUrl(leak.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">${escapeHtml(leak.url)}</a></td>
         <td>${statusBadgeHtml(leak.status)}</td>
         <td>${new Date(leak.found_at).toLocaleDateString()}</td>

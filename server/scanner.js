@@ -20,7 +20,7 @@
 require('dotenv').config();
 const fetch = require('node-fetch');
 const nodemailer = require('nodemailer');
-const { searchGoogle, searchGoogleImages } = require('./googleSearch');
+const { searchGoogle, searchGoogleImages, searchGoogleLens } = require('./googleSearch');
 const db = require('./db');
 const fingerprint = require('./fingerprint');
 const { sendDailyReportEmail } = require('./emailReport');
@@ -177,6 +177,115 @@ const FINGERPRINT_BATCH = 5;
 // Result pages (not images) opened per client per scan to look at their
 // preview images — each costs one page download plus up to 3 image downloads.
 const MAX_PAGE_CHECKS_PER_SCAN = 40;
+
+// ---------- Scan schedule ----------
+// The cron checks every hour; each client is scanned when their plan's
+// interval has passed. Multiple Keywords/Accounts and agency plans scan
+// every SCAN_INTERVAL_HOURS_MULTI hours, Single every
+// SCAN_INTERVAL_HOURS_SINGLE. Every scan costs Serper credits, so raise
+// these if credits run short.
+const hoursFromEnv = (name, fallback) => Math.max(1, Number(process.env[name]) || fallback);
+const SCAN_INTERVAL_HOURS_MULTI = hoursFromEnv('SCAN_INTERVAL_HOURS_MULTI', 6);
+const SCAN_INTERVAL_HOURS_SINGLE = hoursFromEnv('SCAN_INTERVAL_HOURS_SINGLE', 24);
+// A scan that starts a few minutes early is still due, so a client on a
+// 6-hour plan isn't pushed to 7 hours by small timing differences.
+const SCAN_DUE_GRACE_MS = 20 * 60 * 1000;
+
+function scanIntervalHours(user) {
+  return user.plan === 'single' ? SCAN_INTERVAL_HOURS_SINGLE : SCAN_INTERVAL_HOURS_MULTI;
+}
+
+function isScanDue(user, now = Date.now()) {
+  if (!user.last_scan_at) return true;
+  const last = new Date(user.last_scan_at).getTime();
+  return now >= last + scanIntervalHours(user) * 60 * 60 * 1000 - SCAN_DUE_GRACE_MS;
+}
+
+// ---------- Reverse image search (Google Lens) ----------
+// Once a day per client, a few of their own photos are searched with Google
+// Lens. This finds re-uploads on pages that never mention their name. A
+// result is kept only if it names an alias, or its picture matches the
+// searched photo or one of the client's fingerprints (dHash, see
+// fingerprint.js) — Lens also returns merely similar-looking pictures.
+const LENS_IMAGES_PER_DAY = Math.max(0, Number(process.env.LENS_IMAGES_PER_DAY ?? 4));
+const LENS_INTERVAL_MS = 20 * 60 * 60 * 1000;
+const MAX_LENS_DOWNLOADS = 60;
+const MAX_ORIGINAL_LINKS_FOR_IMAGES = 3;
+
+async function pickLensImages(user, originalLinks) {
+  const urls = [...(await db.getReferenceImages(user.id))];
+  // Also use the preview images of the client's own official pages.
+  for (const link of originalLinks.slice(0, MAX_ORIGINAL_LINKS_FOR_IMAGES)) {
+    for (const img of await fingerprint.getPageImageUrls(link)) {
+      if (!urls.includes(img)) urls.push(img);
+    }
+  }
+  if (urls.length <= LENS_IMAGES_PER_DAY) return urls;
+  // Rotate through the list a day at a time so every photo gets searched.
+  const day = Math.floor(Date.now() / 86400000);
+  const start = (day * LENS_IMAGES_PER_DAY) % urls.length;
+  return Array.from({ length: LENS_IMAGES_PER_DAY }, (_, i) => urls[(start + i) % urls.length]);
+}
+
+async function runReverseImageSearch(user, aliases, originalLinks, fingerprints) {
+  const out = { queries: 0, failed: 0, matches: 0, reasons: [] };
+  if (!LENS_IMAGES_PER_DAY) return out;
+  if (user.last_lens_at && Date.now() - new Date(user.last_lens_at).getTime() < LENS_INTERVAL_MS) return out;
+
+  const images = await pickLensImages(user, originalLinks);
+  if (!images.length) return out;
+
+  let downloads = MAX_LENS_DOWNLOADS;
+  const seen = new Set(); // the same page often matches several of the client's photos
+  for (const imageUrl of images) {
+    out.queries++;
+    try {
+      const refHash = await fingerprint.hashImageUrl(imageUrl);
+      const compareTo = refHash ? [...fingerprints, refHash.hash, refHash.flippedHash] : fingerprints;
+      const results = await searchGoogleLens(imageUrl);
+
+      const fresh = [];
+      for (const r of results) {
+        if (seen.has(r.url)) continue;
+        seen.add(r.url);
+        if (isOwnContent(r.url, originalLinks) || isJoinPageUrl(r.url) || isSearchPageUrl(r.url)) continue;
+        if (await db.leakExists(user.id, r.url)) continue;
+        fresh.push(r);
+      }
+
+      for (let i = 0; i < fresh.length; i += FINGERPRINT_BATCH) {
+        const batch = fresh.slice(i, i + FINGERPRINT_BATCH);
+        const hashes = await Promise.all(batch.map((r) => {
+          if (!compareTo.length || !r.thumbnail || downloads <= 0) return null;
+          downloads--;
+          return fingerprint.hashImageUrl(r.thumbnail);
+        }));
+        for (let j = 0; j < batch.length; j++) {
+          const r = batch[j];
+          const alias = aliases.find((a) => matchesAlias(a, r.url, r.title));
+          const distance = fingerprint.bestMatch(hashes[j], compareTo);
+          if (!alias && distance === null) continue;
+          if (distance !== null) out.matches++;
+          await db.insertLeak({
+            userId: user.id,
+            url: r.url,
+            title: distance !== null ? `[Verified match] ${r.title || r.url}` : r.title,
+            source: 'serper_lens',
+            matchedAlias: alias || aliases[0] || null,
+            snippet: r.snippet,
+            fingerprintDistance: distance,
+          });
+        }
+      }
+    } catch (err) {
+      out.failed++;
+      out.reasons.push(err.message);
+      console.warn(`Reverse image search failed for ${user.email}:`, err.message);
+    }
+  }
+  await db.markLensRun(user.id);
+  return out;
+}
 
 function buildImageQueries(alias) {
   return [`"${alias}" leaked photos`];
@@ -513,6 +622,7 @@ async function recheckLeak(leak) {
 
 async function runDailyScanForUser(user) {
   const scanStart = new Date().toISOString();
+  await db.markScanStarted(user.id);
   const aliases = await db.getAliasesForUser(user.id);
   const platforms = (user.platforms || '').split(',').map((p) => p.trim()).filter(Boolean);
   // The creator's own official links — never flag these as leaks, see isOwnContent().
@@ -725,6 +835,13 @@ async function runDailyScanForUser(user) {
     }
   }
 
+  // Reverse image search with the client's own photos (at most once a day).
+  const lens = await runReverseImageSearch(user, aliases, originalLinks, fingerprints);
+  queriesRun += lens.queries;
+  queriesFailed += lens.failed;
+  fingerprintMatches += lens.matches;
+  failureReasons.push(...lens.reasons);
+
   // If a meaningful share of this user's queries errored out (Serper quota
   // exhausted, rate-limited, down, etc.), say so loudly in the logs — a scan
   // that silently loses most of its queries looks identical to "there's
@@ -761,7 +878,7 @@ async function runDailyScanForUser(user) {
     } else if (isJoinPageUrl(leak.url) || isSearchPageUrl(leak.url)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
-    } else if (leak.fingerprint_distance == null && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title)) {
+    } else if (leak.fingerprint_distance == null && leak.source !== 'serper_lens' && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
     } else {
@@ -826,8 +943,8 @@ async function runDailyScanForUser(user) {
     if (removed) await db.markLeakStatus(leak.id, 'removed');
   }
 
-  // Scanning runs every day regardless of plan (catch things fast), but the
-  // EMAIL only goes out on the subscriber's plan cadence — daily for the
+  // Scans run on the plan's interval (see isScanDue), but the EMAIL only
+  // goes out on the subscriber's report cadence — daily for the
   // multi-platform ($100) plan, every 3 days for the single-platform ($50)
   // plan (see report_frequency_days in db.js).
   if (db.isReportDue(user)) {
@@ -853,23 +970,37 @@ async function runDailyScanForUser(user) {
   return { user: user.email, reportSent: false, queriesRun, queriesFailed, fingerprintMatches };
 }
 
-async function runDailyScanForAllUsers() {
-  const users = await db.getActiveUsers();
-  const results = [];
-  for (const user of users) {
-    try {
-      results.push(await runDailyScanForUser(user));
-    } catch (err) {
-      console.error(`Daily scan failed for ${user.email}:`, err.message);
-    }
+// Scans every active client whose interval has passed (or everyone, with
+// force). Runs one at a time; a call while a run is still going is skipped,
+// so a long run can't overlap the next hourly check.
+let scanRunInProgress = false;
+
+async function runDailyScanForAllUsers({ force = false } = {}) {
+  if (scanRunInProgress) {
+    console.log('Scan run skipped: the previous run is still going.');
+    return [];
   }
-  return results;
+  scanRunInProgress = true;
+  try {
+    const users = (await db.getActiveUsers()).filter((u) => force || isScanDue(u));
+    const results = [];
+    for (const user of users) {
+      try {
+        results.push(await runDailyScanForUser(user));
+      } catch (err) {
+        console.error(`Scan failed for ${user.email}:`, err.message);
+      }
+    }
+    return results;
+  } finally {
+    scanRunInProgress = false;
+  }
 }
 
 // Allow running manually: `npm run scan-now`
 if (require.main === module && process.argv.includes('--run-once')) {
   db.ready
-    .then(() => runDailyScanForAllUsers())
+    .then(() => runDailyScanForAllUsers({ force: true }))
     .then((r) => {
       console.log('Scan complete:', r);
       process.exit(0);
@@ -880,4 +1011,4 @@ if (require.main === module && process.argv.includes('--run-once')) {
     });
 }
 
-module.exports = { runDailyScanForUser, runDailyScanForAllUsers, GOOGLE_REMOVAL_TOOL_URL };
+module.exports = { runDailyScanForUser, runDailyScanForAllUsers, scanIntervalHours, isScanDue, GOOGLE_REMOVAL_TOOL_URL };

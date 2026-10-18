@@ -279,6 +279,16 @@ async function fetchPageLinks(pageUrl) {
 }
 
 /**
+ * Fetches a page and returns the URLs of its preview images (empty on any
+ * problem). Used to pick a client's own photos for reverse image search.
+ */
+async function getPageImageUrls(pageUrl) {
+  const page = await safeFetch(pageUrl, { typePrefix: 'text/html', maxBytes: MAX_PAGE_HTML_BYTES, accept: 'text/html' });
+  if (!page) return [];
+  return extractPageImageUrls(page.buffer.toString('utf8'), page.finalUrl);
+}
+
+/**
  * Fetches a result page and fingerprints its preview images. Returns an
  * array of { hash, flippedHash } (possibly empty). Safe to call on any URL.
  */
@@ -304,6 +314,7 @@ module.exports = {
   hashImageUrl,
   hashPageImages,
   fetchPageLinks,
+  getPageImageUrls,
   extractLinkedItems,
   extractPageImageUrls,
   safeAgentFor,

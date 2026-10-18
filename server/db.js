@@ -172,6 +172,27 @@ async function initSchema() {
     -- One free homepage scan per visitor, for life. visitor_hash is a
     -- salted SHA-256 of the visitor's IP address (see index.js) — the raw
     -- IP is never stored.
+    -- Scan scheduling: the cron checks every hour and scans each client
+    -- whose plan interval has passed since last_scan_at (see scanner.js).
+    -- last_lens_at limits the reverse image search to once a day.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_scan_at TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lens_at TIMESTAMPTZ;
+    -- Lemon Squeezy's own subscription status ('active', 'cancelled',
+    -- 'past_due', 'expired', ...) and, for a cancelled subscription, the
+    -- date its paid period ends. users.status is what the scanner obeys.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS ls_subscription_status TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMPTZ;
+
+    -- Public URLs of a client's own photos, searched with Google Lens to
+    -- find re-uploads that don't mention their name. Only the URL is kept.
+    CREATE TABLE IF NOT EXISTS reference_images (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (user_id, url)
+    );
+
     CREATE TABLE IF NOT EXISTS free_scans (
       visitor_hash TEXT PRIMARY KEY,
       alias TEXT,
@@ -247,13 +268,77 @@ async function createUser({ name, email, mobile, passwordHash, plan, platforms, 
 
 async function setUserActiveByCheckoutRef(checkoutRef, lsSubscriptionId) {
   await pool.query(
-    `UPDATE users SET status = 'active', ls_subscription_id = $1 WHERE checkout_ref = $2`,
+    `UPDATE users SET status = 'active', ls_subscription_id = COALESCE($1, ls_subscription_id) WHERE checkout_ref = $2`,
     [lsSubscriptionId || null, checkoutRef]
   );
 }
 
 async function setUserCheckoutRef(userId, checkoutRef) {
   await pool.query(`UPDATE users SET checkout_ref = $1 WHERE id = $2`, [checkoutRef, userId]);
+}
+
+async function getUserByCheckoutRef(checkoutRef) {
+  const result = await pool.query(`SELECT * FROM users WHERE checkout_ref = $1`, [checkoutRef]);
+  return result.rows[0] || null;
+}
+
+async function getUserBySubscriptionId(subscriptionId) {
+  const result = await pool.query(`SELECT * FROM users WHERE ls_subscription_id = $1`, [subscriptionId]);
+  return result.rows[0] || null;
+}
+
+// Applies a Lemon Squeezy subscription change to one account.
+async function setSubscriptionState(userId, { status, lsStatus, endsAt, subscriptionId }) {
+  await pool.query(
+    `UPDATE users
+        SET status = $1,
+            ls_subscription_status = $2,
+            subscription_ends_at = $3,
+            ls_subscription_id = COALESCE($4, ls_subscription_id)
+      WHERE id = $5`,
+    [status, lsStatus, endsAt || null, subscriptionId || null, userId]
+  );
+}
+
+// When an agency's own subscription stops, its creators stop too; when it
+// comes back, creators that were paused because of it come back with it.
+async function setAgencyMembersStatus(agencyId, status) {
+  const from = status === 'active' ? ['expired', 'paused'] : ['active'];
+  await pool.query(
+    `UPDATE users SET status = $1 WHERE agency_id = $2 AND role = 'agency_member' AND status = ANY($3::text[])`,
+    [status, agencyId, from]
+  );
+}
+
+async function markScanStarted(userId) {
+  await pool.query(`UPDATE users SET last_scan_at = NOW() WHERE id = $1`, [userId]);
+}
+
+async function markLensRun(userId) {
+  await pool.query(`UPDATE users SET last_lens_at = NOW() WHERE id = $1`, [userId]);
+}
+
+// ---------- Reference images (reverse image search) ----------
+const MAX_REFERENCE_IMAGES_PER_USER = 30;
+
+async function addReferenceImage(userId, url) {
+  const count = await pool.query(`SELECT COUNT(*) AS n FROM reference_images WHERE user_id = $1`, [userId]);
+  if (Number(count.rows[0].n) >= MAX_REFERENCE_IMAGES_PER_USER) return 'limit';
+  const result = await pool.query(
+    `INSERT INTO reference_images (user_id, url) VALUES ($1, $2) ON CONFLICT (user_id, url) DO NOTHING RETURNING id`,
+    [userId, url]
+  );
+  return result.rowCount ? 'added' : 'exists';
+}
+
+async function getReferenceImages(userId) {
+  const result = await pool.query(`SELECT url FROM reference_images WHERE user_id = $1 ORDER BY id ASC`, [userId]);
+  return result.rows.map((r) => r.url);
+}
+
+async function clearReferenceImages(userId) {
+  const result = await pool.query(`DELETE FROM reference_images WHERE user_id = $1`, [userId]);
+  return result.rowCount;
 }
 
 async function getUserById(id) {
@@ -598,7 +683,7 @@ async function getPendingAdminDigestLeaks({ includeSent = false } = {}) {
     WHERE ($1::boolean OR leaks.admin_digest_sent_at IS NULL)
       AND ($1::boolean = false OR leaks.google_submitted_at IS NULL)
       AND leaks.status NOT IN ('dismissed', 'removed')
-      AND (leaks.status = 'manual_review' OR leaks.source IN ('serper_web', 'serper_image', 'search_expand'))
+      AND (leaks.status = 'manual_review' OR leaks.source IN ('serper_web', 'serper_image', 'serper_lens', 'search_expand'))
     ORDER BY leaks.found_at ASC
   `, [includeSent]);
   return result.rows;
@@ -665,6 +750,16 @@ module.exports = {
   setUserActiveByCheckoutRef,
   setUserCheckoutRef,
   getUserById,
+  getUserByCheckoutRef,
+  getUserBySubscriptionId,
+  setSubscriptionState,
+  setAgencyMembersStatus,
+  markScanStarted,
+  markLensRun,
+  addReferenceImage,
+  getReferenceImages,
+  clearReferenceImages,
+  MAX_REFERENCE_IMAGES_PER_USER,
   getActiveUsers,
   getUserByEmail,
   markReportSentNow,

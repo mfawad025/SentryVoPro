@@ -6,9 +6,10 @@ Handles:
    ownership — not the infringing link).
 2. **Lemon Squeezy checkout** — redirect-based hosted checkout, no card data
    ever touches this server.
-3. **Daily scanning** — searches Google (web + images) for each subscriber's
-   aliases, attempts best-effort DMCA takedown notices, rechecks previously
-   reported leaks for removal.
+3. **Scheduled scanning** — every 6 hours on Multiple/agency plans, daily on
+   Single: searches Google (web + images) for each subscriber's aliases, runs
+   a daily reverse image search (Google Lens) with their own photos, attempts
+   best-effort DMCA takedown notices, rechecks previously reported leaks.
 4. **Email reports** — sent on each subscriber's plan cadence (daily for
    Multiple Keywords/Accounts, every 3 days for Single Keyword/Account).
 
@@ -73,7 +74,10 @@ Login now sets a real `httpOnly` cookie (see `SESSION_COOKIE_NAME` in
    as `LEMONSQUEEZY_CHECKOUT_URL_SINGLE` / `LEMONSQUEEZY_CHECKOUT_URL_MULTI`.
 4. Go to **Settings > Webhooks**, add a webhook pointing at
    `https://<your-deployed-backend>/api/lemonsqueezy/webhook`, and subscribe
-   it to at least `order_created` and `subscription_created`.
+   it to `order_created`, `subscription_created`, `subscription_updated`,
+   `subscription_cancelled`, `subscription_resumed`, `subscription_expired`,
+   `subscription_paused` and `subscription_unpaused`. Without the later
+   ones, cancelled clients keep being scanned.
 5. Copy the signing secret Lemon Squeezy gives you into
    `LEMONSQUEEZY_WEBHOOK_SECRET`.
 6. **Set up the first-order discount**: Dashboard > Discounts > New Discount
@@ -212,7 +216,7 @@ can wire up for you.
   unlike the old SQLite setup. Nothing to worry about here anymore as long
   as `DATABASE_URL` stays correctly set in your host's environment variables.
 - Keep the server **always-on** (Render Starter tier or equivalent, not a
-  free tier that sleeps) or the daily cron job won't fire reliably.
+  free tier that sleeps) or the hourly scan check won't fire reliably.
   Alternative: use an external cron service (e.g. cron-job.org, free) to hit
   `/api/scan/run-now?key=YOUR_ADMIN_KEY` on a schedule instead of relying on
   `node-cron` inside a sleeping process. (The admin key is required — this

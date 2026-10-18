@@ -52,7 +52,27 @@ async function searchGoogleImages(query) {
   }));
 }
 
+// Reverse image search (Google Lens): pages showing the same or a very
+// similar picture. imageUrl must be publicly reachable.
+async function searchGoogleLens(imageUrl) {
+  const data = await post('/lens', { url: imageUrl });
+  // Serper has returned visual matches under different keys across versions.
+  const matches = data.organic || data.visualMatches || data.visual_matches || [];
+  return matches
+    .map((item) => ({
+      url: item.link || item.url,
+      title: item.title || '',
+      snippet: [item.source, item.link].filter(Boolean).join(' '),
+      thumbnail: item.thumbnailUrl || item.thumbnail || item.imageUrl || null,
+    }))
+    .filter((m) => m.url);
+}
+
 async function runQuery(path, query) {
+  return post(path, { q: query, num: 100 });
+}
+
+async function post(path, body) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey || apiKey === 'your_serper_api_key') {
     throw new Error('Serper.dev is not configured (SERPER_API_KEY missing)');
@@ -70,7 +90,7 @@ async function runQuery(path, query) {
     // (100 costs the same as 60). If the 400 error ever returns, the
     // paid credits have likely run out or expired (6-month validity) —
     // check the Serper dashboard and drop this to 10 as a stopgap.
-    body: JSON.stringify({ q: query, num: 100 }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -81,4 +101,4 @@ async function runQuery(path, query) {
   return res.json();
 }
 
-module.exports = { searchGoogle, searchGoogleImages };
+module.exports = { searchGoogle, searchGoogleImages, searchGoogleLens };

@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Squeezy's affiliate.js tracks it too, but the code is also kept here so it
 // survives ad blockers and reaches the checkout, which our server builds.
 const REFERRAL_KEY = 'sv_referral';
-const REFERRAL_DAYS = 30; // keep in line with the cookie length in Lemon Squeezy
+const REFERRAL_DAYS = 60; // keep in line with the cookie length in Lemon Squeezy
 const REFERRAL_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
 
 function rememberReferral() {

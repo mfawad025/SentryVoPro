@@ -315,10 +315,18 @@ const accountLimiter = rateLimit({
 
 const MIN_PASSWORD_LENGTH = 6;
 
+// Sales partner code sent with a sign-up (see script.js). Anything that
+// isn't a plain code is ignored rather than failing the sign-up.
+function cleanReferralCode(raw) {
+  const code = String(raw || '').trim();
+  return /^[A-Za-z0-9_-]{1,40}$/.test(code) ? code : null;
+}
+
 // ---------------- Registration (creates account + starts Lemon Squeezy checkout) ----------------
 app.post('/api/register', accountLimiter, async (req, res) => {
   try {
     const { name, email, mobile, password, plan, platforms, aliases, originalLinks } = req.body || {};
+    const referralCode = cleanReferralCode(req.body?.referralCode);
 
     if (!name || !email || !mobile || !password || !plan) {
       return res.status(400).json({ error: 'name, email, mobile, password and plan are required' });
@@ -365,8 +373,9 @@ app.post('/api/register', accountLimiter, async (req, res) => {
       ? originalLinks
       : String(originalLinks || '').split('\n').map((l) => l.trim());
     await db.addOriginalLinks(userId, linkList);
+    if (referralCode) await db.setUserReferralCode(userId, referralCode);
 
-    const checkoutUrl = buildCheckoutUrl(plan, { userId, name, email });
+    const checkoutUrl = buildCheckoutUrl(plan, { userId, name, email, referralCode });
 
     res.json({ checkoutUrl, userId });
   } catch (err) {
@@ -384,6 +393,7 @@ app.post('/api/register', accountLimiter, async (req, res) => {
 app.post('/api/register/agency', accountLimiter, async (req, res) => {
   try {
     const { agencyName, ownerName, email, mobile, password, tier } = req.body || {};
+    const referralCode = cleanReferralCode(req.body?.referralCode);
 
     if (!agencyName || !ownerName || !email || !mobile || !password || !tier) {
       return res.status(400).json({ error: 'agencyName, ownerName, email, mobile, password and tier are required' });
@@ -415,8 +425,9 @@ app.post('/api/register/agency', accountLimiter, async (req, res) => {
       role: 'agency_owner',
     });
     await db.setUserCheckoutRef(ownerId, String(ownerId));
+    if (referralCode) await db.setUserReferralCode(ownerId, referralCode);
 
-    const checkoutUrl = buildCheckoutUrl(tier, { userId: ownerId, name: ownerName, email });
+    const checkoutUrl = buildCheckoutUrl(tier, { userId: ownerId, name: ownerName, email, referralCode });
 
     res.json({ checkoutUrl, agencyId, ownerId });
   } catch (err) {

@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+  rememberReferral();
+  prefillReferralFields();
   // Mobile nav toggle
   const toggle = document.querySelector('.nav-toggle');
   const links = document.querySelector('.nav-links');
@@ -37,6 +39,47 @@ document.addEventListener('DOMContentLoaded', () => {
   initRegisterForm();
   initFreeScan();
 });
+
+// ---------------- Partner referrals (Lemon Squeezy affiliates) ----------------
+// A partner's link looks like https://www.sentryvo.com/?aff=CODE. Lemon
+// Squeezy's affiliate.js tracks it too, but the code is also kept here so it
+// survives ad blockers and reaches the checkout, which our server builds.
+const REFERRAL_KEY = 'sv_referral';
+const REFERRAL_DAYS = 30; // keep in line with the cookie length in Lemon Squeezy
+const REFERRAL_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+
+function rememberReferral() {
+  const code = new URLSearchParams(window.location.search).get('aff');
+  if (!code || !REFERRAL_PATTERN.test(code)) return;
+  try { localStorage.setItem(REFERRAL_KEY, JSON.stringify({ code, at: Date.now() })); } catch (e) { /* storage blocked */ }
+}
+
+function getReferralCode() {
+  try {
+    const fromLemon = window.LemonSqueezy?.Affiliate?.GetID?.();
+    if (fromLemon && REFERRAL_PATTERN.test(String(fromLemon))) return String(fromLemon);
+  } catch (e) { /* affiliate.js not loaded */ }
+  try {
+    const saved = JSON.parse(localStorage.getItem(REFERRAL_KEY) || 'null');
+    if (saved && REFERRAL_PATTERN.test(saved.code) && Date.now() - saved.at < REFERRAL_DAYS * 86400000) return saved.code;
+  } catch (e) { /* storage blocked or bad value */ }
+  return '';
+}
+
+// Sign-up forms have an optional "Referral code" box; fill it in when the
+// visitor arrived through a partner's link.
+function prefillReferralFields() {
+  document.querySelectorAll('[data-referral-field]').forEach((input) => {
+    if (!input.value) input.value = getReferralCode();
+  });
+}
+
+// The code to send with a sign-up: what the visitor typed, else the tracked one.
+function referralCodeFor(form) {
+  const typed = form.querySelector('[data-referral-field]')?.value.trim() || '';
+  if (typed) return REFERRAL_PATTERN.test(typed) ? typed : null;
+  return getReferralCode();
+}
 
 // ---------------- Registration + Lemon Squeezy checkout flow ----------------
 // Point this at your deployed backend (see /server/README.md).
@@ -94,6 +137,11 @@ function initRegisterForm() {
     }
 
     if (!name || !email || !mobile || !password) return;
+    const referralCode = referralCodeFor(form);
+    if (referralCode === null) {
+      if (statusEl) { statusEl.textContent = 'That referral code doesn\'t look right. Use letters, numbers, - or _, or leave it empty.'; statusEl.style.color = 'var(--rust)'; }
+      return;
+    }
     if (!platforms.length) {
       if (statusEl) { statusEl.textContent = 'Select at least one platform.'; statusEl.style.color = 'var(--rust)'; }
       return;
@@ -111,7 +159,7 @@ function initRegisterForm() {
       const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/register`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ plan, platforms, name, email, mobile, password, aliases, originalLinks }),
+        body: JSON.stringify({ plan, platforms, name, email, mobile, password, aliases, originalLinks, referralCode }),
       });
 
       if (!res.ok) {

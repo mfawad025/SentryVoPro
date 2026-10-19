@@ -38,7 +38,7 @@ const CHECKOUT_URLS = {
   agency_growth: process.env.LEMONSQUEEZY_CHECKOUT_URL_AGENCY_GROWTH,
 };
 
-function buildCheckoutUrl(planKey, { userId, name, email }) {
+function buildCheckoutUrl(planKey, { userId, name, email, referralCode = null }) {
   const base = CHECKOUT_URLS[planKey];
   if (!base) {
     throw new Error(`No Lemon Squeezy checkout URL configured for plan "${planKey}"`);
@@ -68,6 +68,12 @@ function buildCheckoutUrl(planKey, { userId, name, email }) {
   // "Redirect URL" in Lemon Squeezy's dashboard (Product > Checkout tab),
   // since that's the setting Lemon Squeezy is guaranteed to honor even if
   // this query param behavior changes.
+  // Sales partner referral: Lemon Squeezy credits the order to the affiliate
+  // whose code is in `aff` (their links look like ?aff=CODE).
+  if (referralCode) {
+    url.searchParams.set('aff', referralCode);
+  }
+
   if (process.env.SENTRYVO_SITE_URL) {
     url.searchParams.set('checkout[redirect_url]', `${process.env.SENTRYVO_SITE_URL}/success.html`);
   }

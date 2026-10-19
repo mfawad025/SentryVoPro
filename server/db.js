@@ -181,6 +181,8 @@ async function initSchema() {
     -- 'past_due', 'expired', ...) and, for a cancelled subscription, the
     -- date its paid period ends. users.status is what the scanner obeys.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS ls_subscription_status TEXT;
+    -- Sales partner (Lemon Squeezy affiliate) code the client signed up with.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMPTZ;
 
     -- Public URLs of a client's own photos, searched with Google Lens to
@@ -308,6 +310,10 @@ async function setAgencyMembersStatus(agencyId, status) {
     `UPDATE users SET status = $1 WHERE agency_id = $2 AND role = 'agency_member' AND status = ANY($3::text[])`,
     [status, agencyId, from]
   );
+}
+
+async function setUserReferralCode(userId, code) {
+  await pool.query(`UPDATE users SET referral_code = $1 WHERE id = $2`, [code, userId]);
 }
 
 async function markScanStarted(userId) {
@@ -754,6 +760,7 @@ module.exports = {
   getUserBySubscriptionId,
   setSubscriptionState,
   setAgencyMembersStatus,
+  setUserReferralCode,
   markScanStarted,
   markLensRun,
   addReferenceImage,

@@ -65,3 +65,9 @@ Follow-up/escalation notices, impersonator (fake account) search, managed top pl
 - Shared tokens, fonts (Unbounded / Instrument Sans / Martian Mono), buttons and the Radar Sweep logo live in `style.css`; light by default, dark via `prefers-color-scheme`.
 - Homepage-only sections and animations: `home.css` + `home.js` (classes prefixed `h-`). The real free scan still runs through `script.js` (`#free-scan-*` ids).
 - Logo files: `assets/favicon.svg`, `assets/logo-mark.svg`, `assets/logo-icon.png` (512px app icon), `assets/logo-full.png` (1200×630 share image). `logo-nav.png` and `logo-full-trimmed.png` are no longer used.
+
+## Sales partner referrals (Lemon Squeezy affiliates)
+- Store `mfawad442`. Every public page loads Lemon Squeezy's `affiliate.js`. Partner links look like `https://www.sentryvo.com/?aff=CODE`.
+- `script.js` also keeps the code in localStorage for 30 days (`sv_referral`), so it survives ad blockers, and prefills the optional "Referral code" box on both sign-up forms.
+- The server adds `aff=CODE` to the Lemon Squeezy checkout URL (`lemonsqueezy.js`) and saves it in `users.referral_code`. Lemon Squeezy calculates and pays the commission.
+- Keep `REFERRAL_DAYS` in `script.js` equal to the cookie length set in Lemon Squeezy.

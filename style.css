@@ -137,7 +137,7 @@ p{ margin:0 0 1em; color:var(--text-mid); }
   -webkit-backdrop-filter: blur(var(--blur));
   border-bottom:1px solid var(--glass-border-soft);
 }
-.nav{ display:flex; align-items:center; justify-content:space-between; padding:16px 0; }
+.nav{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding-block:16px; }
 .logo{ display:flex; align-items:center; gap:10px; font-family:var(--font-head); font-weight:700; font-size:1.1rem; letter-spacing:-.03em; color:var(--ink); }
 .logo-mark{ width:32px; height:32px; flex:0 0 auto; color:var(--ink); }
 .logo-mark .sweep{ transform-origin:32px 32px; animation:logoSweep 3.6s linear infinite; }
@@ -429,14 +429,35 @@ section{ padding:84px 0; }
 
   .dash-stats{ grid-template-columns:1fr 1fr; }
 
+  /* Mobile menu: a solid panel that drops down under the header and dims
+     the page behind it. */
   .nav-links{
-    position:fixed; inset:60px 0 0 0; background:var(--glass-strong); backdrop-filter: blur(var(--blur));
-    flex-direction:column; align-items:flex-start; padding:30px 28px; gap:22px;
+    position:absolute; top:100%; left:0; right:0;
+    background:var(--paper-2); border-top:1px solid var(--line);
+    box-shadow:0 30px 40px -24px var(--shadow);
+    flex-direction:column; align-items:stretch; gap:0;
+    padding:6px max(20px, env(safe-area-inset-right, 0px)) 18px max(20px, env(safe-area-inset-left, 0px));
     opacity:0; visibility:hidden; transform:translateY(-8px);
-    transition:opacity .25s ease, transform .25s ease, visibility .25s; font-size:1rem;
+    transition:opacity .25s ease, transform .25s ease, visibility .25s;
   }
   .nav-links.open{ opacity:1; visibility:visible; transform:none; }
-  .nav-toggle{ display:block; background:none; border:1px solid var(--line); color:var(--ink); padding:8px 12px; border-radius:8px; font-family:var(--font-body); cursor:pointer; }
+  /* Dims the page below the panel; tapping it closes the menu (script.js). */
+  .nav-links::after{ content:""; position:absolute; left:0; right:0; top:100%; height:100vh; background:rgba(26,21,48,.45); }
+  .nav-links a{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 4px; border-bottom:1px solid var(--line-soft);
+    font-size:1.05rem; font-weight:600; color:var(--ink);
+  }
+  .nav-links a:last-child{ border-bottom:0; }
+  .nav-links a::after{ content:"→"; color:var(--rust); font-weight:500; }
+  .nav-links a:hover, .nav-links a:focus-visible{ color:var(--rust); }
+  .nav-toggle{
+    display:inline-flex; align-items:center; gap:8px; flex:0 0 auto;
+    background:var(--paper-2); border:1px solid var(--line); color:var(--ink);
+    padding:10px 14px; border-radius:12px; cursor:pointer;
+    font:600 .8rem/1 var(--font-body); letter-spacing:.08em;
+  }
+  .nav-toggle[aria-expanded="true"]{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
   .nav-cta{ display:none; }
 
   /* Tables can overflow badly on narrow screens (long URLs especially) —

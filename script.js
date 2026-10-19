@@ -3,11 +3,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.querySelector('.nav-toggle');
   const links = document.querySelector('.nav-links');
   if (toggle && links) {
-    toggle.addEventListener('click', () => {
-      const open = links.classList.toggle('open');
+    const setOpen = (open) => {
+      links.classList.toggle('open', open);
       toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.textContent = open ? 'CLOSE' : 'MENU';
+    };
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(!links.classList.contains('open'));
     });
-    links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => links.classList.remove('open')));
+    links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setOpen(false)));
+    // Tapping the dimmed page behind the menu, or pressing Escape, closes it.
+    document.addEventListener('click', (e) => {
+      if (!links.classList.contains('open')) return;
+      const onBackdrop = e.target === links && e.offsetY > links.clientHeight;
+      if (onBackdrop || !links.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
   }
 
   // FAQ accordion

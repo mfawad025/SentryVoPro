@@ -1,0 +1,269 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800&family=Instrument+Sans:wght@500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* 1920x1080 landscape promo (same timeline as the vertical one). Every animation sits on one global timeline (delays in
+   seconds from the start) and is driven frame by frame by renderAt(ms). */
+:root{ --night:#110D1C; --panel:#1D1731; --ink:#EFEAF7; --dim:rgba(239,234,247,.62); --line:rgba(239,234,247,.14);
+  --rose:#FF5A9D; --teal:#2FCFB4; --amber:#F2A33A; --head:'Unbounded',sans-serif; --body:'Instrument Sans',sans-serif; --mono:'Martian Mono',monospace; }
+*{ margin:0; box-sizing:border-box; }
+body{ width:1920px; height:1080px; overflow:hidden; background:var(--night); color:var(--ink); font-family:var(--body); position:relative; }
+.bg{ position:absolute; inset:0; background:radial-gradient(900px 900px at 80% 15%, rgba(255,90,157,.16), transparent 60%), radial-gradient(800px 800px at 0% 95%, rgba(107,79,216,.22), transparent 65%); }
+.anim{ animation-fill-mode:both; animation-timing-function:cubic-bezier(.2,.7,.1,1); }
+
+/* persistent top bar */
+.top{ position:absolute; top:90px; left:80px; right:80px; display:flex; align-items:center; justify-content:space-between; }
+.brand{ display:flex; align-items:center; gap:18px; font:700 44px/1 var(--head); letter-spacing:-.03em; }
+.brand svg{ width:64px; height:64px; }
+.sweep{ transform-origin:32px 32px; animation:spin 3.6s linear infinite; }
+.pill{ font:500 20px/1 var(--mono); letter-spacing:.14em; color:var(--teal); display:flex; align-items:center; gap:12px; }
+.pill i{ width:12px; height:12px; border-radius:50%; background:currentColor; animation:blink 1.4s steps(2) infinite; }
+.foot{ position:absolute; bottom:90px; left:80px; right:80px; display:flex; justify-content:space-between; font:500 22px/1 var(--mono); letter-spacing:.1em; color:var(--dim); }
+
+.scene{ position:absolute; left:80px; right:80px; top:240px; bottom:200px; opacity:0;
+  animation:sceneIn .6s ease var(--in) both, sceneOut .5s ease var(--out) forwards; }
+.label{ font:500 24px/1.3 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--rose); }
+h1{ font:800 132px/1 var(--head); letter-spacing:-.05em; }
+h2{ font:800 76px/1.05 var(--head); letter-spacing:-.04em; }
+.rose{ color:var(--rose); }
+.up{ animation-name:up; animation-duration:.7s; }
+.redact{ position:relative; display:inline-block; }
+.redact::after{ content:""; position:absolute; left:-6px; right:-6px; top:16px; bottom:4px; background:var(--ink); border-radius:6px; transform-origin:right;
+  animation:unredact .8s cubic-bezier(.7,0,.2,1) var(--d) both; }
+
+/* scene 1 */
+.s1{ display:flex; flex-direction:column; justify-content:center; gap:46px; }
+.s1 p{ font:500 40px/1.4 var(--body); color:var(--dim); max-width:22ch; }
+
+/* scene 2: radar */
+.s2{ display:flex; flex-direction:column; gap:34px; }
+#radar{ width:820px; height:820px; align-self:center; }
+.chips{ display:flex; flex-wrap:wrap; gap:16px; }
+.chip{ font:600 28px/1 var(--body); padding:16px 24px; border-radius:999px; border:2px solid var(--line); background:rgba(239,234,247,.05);
+  animation-name:pop; animation-duration:.5s; }
+
+/* scene 3-4: search page */
+.s3{ display:flex; flex-direction:column; gap:44px; }
+.heads{ position:relative; height:250px; }
+.heads h2{ position:absolute; inset:0; opacity:0; animation:fadeSwap .5s ease var(--a) both, fadeSwapOut .4s ease var(--b) forwards; }
+.browser{ background:var(--panel); border:2px solid var(--line); border-radius:36px; overflow:hidden; }
+.bar{ display:flex; align-items:center; gap:14px; padding:26px 30px; border-bottom:2px solid var(--line); }
+.bar i{ width:18px; height:18px; border-radius:50%; background:var(--line); }
+.query{ flex:1; margin-left:12px; background:var(--night); border-radius:999px; padding:20px 30px; font:400 28px/1 var(--mono); white-space:nowrap; overflow:hidden; display:flex; }
+.typed{ display:inline-block; overflow:hidden; white-space:nowrap; width:0; animation:type 1.2s steps(22) 9.6s both; }
+.caret{ width:3px; background:var(--ink); margin-left:2px; animation:blink 1s steps(2) infinite; }
+.rows{ padding:12px 30px 22px; }
+.row{ position:relative; display:grid; grid-template-columns:1fr auto; gap:6px 20px; align-items:center; padding:26px 6px; border-bottom:2px solid var(--line);
+  max-height:200px; overflow:hidden; animation:rowIn .5s ease var(--r) both, hl .4s ease calc(var(--t) * 1s) both, collapse .6s ease calc(var(--t) * 1s + 2s) forwards; }
+.row.own{ animation:rowIn .5s ease var(--r) both; }
+.row:last-child{ border-bottom:0; }
+.t{ font:600 34px/1.2 var(--body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position:relative; }
+.t::after{ content:""; position:absolute; left:0; top:54%; height:4px; width:100%; background:var(--rose); transform:scaleX(0); transform-origin:left;
+  animation:strike .5s ease calc(var(--t) * 1s + .9s) both; }
+.own .t{ color:var(--teal); }
+.own .t::after{ display:none; }
+.u{ font:400 22px/1.3 var(--mono); color:var(--dim); }
+.badges{ grid-row:1 / span 2; grid-column:2; position:relative; width:220px; height:48px; }
+.badge{ position:absolute; right:0; top:0; font:500 20px/1 var(--mono); letter-spacing:.08em; padding:14px 18px; border-radius:999px; white-space:nowrap; opacity:0; }
+.b-found{ color:var(--rose); background:rgba(255,90,157,.16); animation:fadeIn .3s ease calc(var(--r) + .4s) both, fadeOut .2s ease calc(var(--t) * 1s + .5s) forwards; }
+.b-sent{ color:var(--amber); background:rgba(242,163,58,.16); animation:fadeIn .25s ease calc(var(--t) * 1s + .5s) both, fadeOut .2s ease calc(var(--t) * 1s + 1.3s) forwards; }
+.b-removed{ color:var(--teal); background:rgba(47,207,180,.16); animation:fadeIn .25s ease calc(var(--t) * 1s + 1.3s) both; }
+.b-own{ color:var(--teal); background:rgba(47,207,180,.16); animation:fadeIn .3s ease calc(var(--r) + .4s) both; }
+.stamp{ position:absolute; right:250px; top:50%; font:800 34px/1 var(--head); color:var(--teal); background:rgba(17,13,28,.92); border:5px solid var(--teal); padding:10px 16px; border-radius:12px; opacity:0;
+  transform:translateY(-50%) rotate(-8deg); animation:stamp .35s cubic-bezier(.3,1.6,.5,1) calc(var(--t) * 1s + 1.3s) both; }
+.counter{ display:flex; justify-content:space-between; padding:22px 36px; border-top:2px solid var(--line); font:500 24px/1 var(--mono); color:var(--dim); }
+.num{ position:relative; display:inline-block; width:1.2ch; height:1em; color:var(--ink); }
+.num b{ position:absolute; left:0; top:0; opacity:0; animation:numOn .01s linear var(--on) both, numOff .01s linear var(--off) forwards; }
+.note{ font:400 22px/1.4 var(--mono); color:var(--dim); }
+
+/* scene 5: features */
+.s5{ display:flex; flex-direction:column; gap:54px; justify-content:center; }
+.feat{ display:grid; grid-template-columns:120px 1fr; gap:34px; align-items:center; animation-name:slideIn; animation-duration:.6s; }
+.ic{ width:120px; height:120px; border-radius:32px; background:rgba(255,90,157,.14); display:grid; place-items:center; }
+.ic svg{ width:60px; height:60px; color:var(--rose); }
+.feat b{ display:block; font:700 46px/1.1 var(--head); letter-spacing:-.03em; }
+.feat span{ display:block; margin-top:10px; font:500 32px/1.35 var(--body); color:var(--dim); }
+
+/* scene 6: CTA */
+.s6{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:50px; }
+.bigmark{ width:300px; height:300px; animation-name:pop; animation-duration:.8s; }
+.cta{ background:var(--rose); color:#1A0B14; font:700 56px/1 var(--head); letter-spacing:-.03em; padding:44px 70px; border-radius:40px; animation-name:pop; animation-duration:.6s; }
+.url{ font:700 64px/1 var(--head); letter-spacing:-.03em; }
+.sub{ font:500 36px/1.4 var(--body); color:var(--dim); }
+
+@keyframes spin{ to{ transform:rotate(360deg); } }
+@keyframes blink{ 50%{ opacity:.25; } }
+@keyframes sceneIn{ from{ opacity:0; transform:translateY(30px); } to{ opacity:1; transform:none; } }
+@keyframes sceneOut{ from{ opacity:1; } to{ opacity:0; transform:translateY(-30px); } }
+@keyframes up{ from{ opacity:0; transform:translateY(40px); } to{ opacity:1; transform:none; } }
+@keyframes unredact{ from{ transform:scaleX(1); } to{ transform:scaleX(0); } }
+@keyframes pop{ 0%{ opacity:0; transform:scale(.6); } 70%{ transform:scale(1.06); } 100%{ opacity:1; transform:none; } }
+@keyframes fadeSwap{ from{ opacity:0; transform:translateY(24px); } to{ opacity:1; transform:none; } }
+@keyframes fadeSwapOut{ to{ opacity:0; transform:translateY(-24px); } }
+@keyframes type{ from{ width:0; } to{ width:22ch; } }
+@keyframes rowIn{ from{ opacity:0; transform:translateX(-40px); } to{ opacity:1; transform:none; } }
+@keyframes hl{ to{ background:rgba(255,90,157,.12); } }
+@keyframes collapse{ to{ max-height:0; padding-top:0; padding-bottom:0; opacity:0; border-bottom-width:0; } }
+@keyframes strike{ to{ transform:scaleX(1); } }
+@keyframes fadeIn{ to{ opacity:1; } }
+@keyframes fadeOut{ to{ opacity:0; } }
+@keyframes stamp{ from{ opacity:0; transform:translateY(-50%) rotate(-8deg) scale(2.4); } to{ opacity:1; transform:translateY(-50%) rotate(-8deg) scale(1); } }
+@keyframes numOn{ to{ opacity:1; } }
+@keyframes numOff{ to{ opacity:0; } }
+@keyframes slideIn{ from{ opacity:0; transform:translateX(80px); } to{ opacity:1; transform:none; } }
+
+/* ---------- landscape layout ---------- */
+.land .top{ top:56px; left:110px; right:110px; }
+.land .foot{ bottom:52px; left:110px; right:110px; }
+.land .scene{ top:170px; bottom:120px; left:110px; right:110px; }
+.land h2{ font-size:68px; }
+.land .s1{ gap:36px; }
+.land .s1 h1{ font-size:150px; }
+.land .s1 h1 br:nth-of-type(1), .land .s1 h1 br:nth-of-type(3){ display:none; }
+.land .s1 p{ max-width:none; font-size:40px; }
+.land .s2{ display:grid; grid-template-columns:minmax(0,1fr) 720px; grid-template-rows:auto auto 1fr; column-gap:80px; row-gap:30px; align-items:start; }
+.land .s2 .label{ grid-column:1; grid-row:1; }
+.land .s2 h2{ grid-column:1; grid-row:2; font-size:76px; }
+.land .s2 .chips{ grid-column:1; grid-row:3; align-self:start; }
+.land #radar{ grid-column:2; grid-row:1 / span 3; width:720px; height:720px; align-self:center; }
+.land .s3{ display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); grid-template-rows:auto 1fr; column-gap:80px; align-items:start; padding-top:30px; }
+.land .s3 .heads{ grid-column:1; grid-row:1; height:330px; }
+.land .s3 .note{ grid-column:1; grid-row:2; align-self:start; }
+.land .s3 .browser{ grid-column:2; grid-row:1 / span 2; }
+.land .row{ padding:20px 6px; }
+.land .s5{ display:grid; grid-template-columns:1fr 1fr; gap:56px 80px; align-content:center; }
+.land .s5 .label{ grid-column:1 / -1; }
+.land .s6{ gap:30px; }
+.land .bigmark{ width:210px; height:210px; }
+.land .s6 h2{ font-size:64px; }
+.land .cta{ font-size:46px; padding:34px 60px; }
+.land .url{ font-size:56px; }
+.land .sub{ font-size:32px; }
+</style></head>
+<body class="land">
+<div class="bg"></div>
+
+<div class="top">
+  <div class="brand"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#EFEAF7" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#EFEAF7" stroke-width="4" opacity=".35"/><g class="sweep"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="46" cy="42" r="3.2" fill="#EFEAF7"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg>SentryVo</div>
+  <div class="pill"><i></i>PROTECTING CREATORS</div>
+</div>
+
+<!-- 1 · Hook (0–4s) -->
+<section class="scene s1" style="--in:0s; --out:3.6s">
+  <span class="label anim up" style="animation-delay:.2s">Leak detection &amp; DMCA takedowns</span>
+  <h1>
+    <span class="redact" style="--d:.4s">Leaked</span><br>
+    <span class="redact" style="--d:.6s">today.</span><br>
+    <span class="redact rose" style="--d:1s">Gone</span><br>
+    <span class="redact rose" style="--d:1.2s">tomorrow.</span>
+  </h1>
+  <p class="anim up" style="animation-delay:1.9s">Your content, found and taken down on autopilot.</p>
+</section>
+
+<!-- 2 · Scanning (4–9s) -->
+<section class="scene s2" style="--in:4s; --out:8.7s">
+  <span class="label anim up" style="animation-delay:4.2s">Always scanning</span>
+  <h2 class="anim up" style="animation-delay:4.35s">We search the web for you <span class="rose">every 6 hours</span></h2>
+  <canvas id="radar" width="920" height="920"></canvas>
+  <div class="chips">
+    <span class="chip anim" style="animation-delay:5.4s">Google</span>
+    <span class="chip anim" style="animation-delay:5.65s">Google Images</span>
+    <span class="chip anim" style="animation-delay:5.9s">Telegram</span>
+    <span class="chip anim" style="animation-delay:6.15s">Reddit</span>
+    <span class="chip anim" style="animation-delay:6.4s">X</span>
+    <span class="chip anim" style="animation-delay:6.65s">Leak &amp; tube sites</span>
+  </div>
+</section>
+
+<!-- 3–4 · Find and take down (9–21s) -->
+<section class="scene s3" style="--in:9s; --out:20.7s">
+  <div class="heads">
+    <h2 style="--a:9.2s; --b:13.6s">Found: <span class="rose">4 leaks</span> of kitsykat's content</h2>
+    <h2 style="--a:14s; --b:20.7s">DMCA notices sent. <span class="rose">One by one, gone.</span></h2>
+  </div>
+  <div class="browser">
+    <div class="bar"><i></i><i></i><i></i>
+      <div class="query"><span class="typed">"kitsykat" leaked nude</span><span class="caret"></span></div>
+    </div>
+    <div class="rows">
+      <div class="row own" style="--r:10.9s"><span class="t">kitsykat | OnlyFans</span><span class="badges"><span class="badge b-own">YOUR PAGE</span></span><span class="u">onlyfans.com/kitsykat</span></div>
+      <div class="row" style="--r:11.2s; --t:14.4"><span class="t">kitsykat full leak pack (free download)</span><span class="badges"><span class="badge b-found">LEAK FOUND</span><span class="badge b-sent">DMCA SENT</span><span class="badge b-removed">REMOVED</span></span><span class="u">pirate-tube.xyz/leaks/kitsykat</span><span class="stamp">REMOVED</span></div>
+      <div class="row" style="--r:11.5s; --t:15.9"><span class="t">kitsykat leaked | Telegram channel</span><span class="badges"><span class="badge b-found">LEAK FOUND</span><span class="badge b-sent">DMCA SENT</span><span class="badge b-removed">REMOVED</span></span><span class="u">t.me/leaked_creators/4829</span><span class="stamp">REMOVED</span></div>
+      <div class="row" style="--r:11.8s; --t:17.4"><span class="t">kitsykat gallery · 214 photos</span><span class="badges"><span class="badge b-found">LEAK FOUND</span><span class="badge b-sent">DMCA SENT</span><span class="badge b-removed">REMOVED</span></span><span class="u">leakhub.cc/kitsykat/gallery</span><span class="stamp">REMOVED</span></div>
+      <div class="row" style="--r:12.1s; --t:18.9"><span class="t">kitsykat new set · mega link</span><span class="badges"><span class="badge b-found">LEAK FOUND</span><span class="badge b-sent">DMCA SENT</span><span class="badge b-removed">REMOVED</span></span><span class="u">forum.vip/thread/kitsykat-mega</span><span class="stamp">REMOVED</span></div>
+    </div>
+    <div class="counter"><span>Example search</span><span>Leaks left:
+      <span class="num"><b style="--on:12.4s; --off:15.7s">4</b><b style="--on:15.7s; --off:17.2s">3</b><b style="--on:17.2s; --off:18.7s">2</b><b style="--on:18.7s; --off:20.2s">1</b><b style="--on:20.2s; --off:99s; color:#2FCFB4">0</b></span></span></div>
+  </div>
+  <p class="note anim up" style="animation-delay:12.6s">Your own pages are never reported. Illustrative example.</p>
+</section>
+
+<!-- 5 · Features (21–26s) -->
+<section class="scene s5" style="--in:21s; --out:25.7s">
+  <span class="label anim up" style="animation-delay:21.1s">Everything included</span>
+  <div class="feat anim" style="animation-delay:21.4s"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></div><div><b>Reverse image search</b><span>Finds your photos even when your name isn't on the page</span></div></div>
+  <div class="feat anim" style="animation-delay:22.1s"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div><div><b>Real takedowns</b><span>Notices go to the actual host, rechecked until removed</span></div></div>
+  <div class="feat anim" style="animation-delay:22.8s"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div><div><b>Google delisting</b><span>Dead links removed from search results too</span></div></div>
+  <div class="feat anim" style="animation-delay:23.5s"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 20V10"/></svg></div><div><b>Reports &amp; dashboard</b><span>Every link and its status, plus an Excel export</span></div></div>
+</section>
+
+<!-- 6 · CTA (26–31s) -->
+<section class="scene s6" style="--in:26s; --out:99s">
+  <svg class="bigmark anim" style="animation-delay:26.1s" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#EFEAF7" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#EFEAF7" stroke-width="4" opacity=".35"/><g class="sweep"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="46" cy="42" r="3.2" fill="#EFEAF7"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg>
+  <h2 class="anim up" style="animation-delay:26.5s">See what's out there<br><span class="rose">in seconds.</span></h2>
+  <div class="cta anim" style="animation-delay:27.1s">Run your free scan</div>
+  <div class="url anim up" style="animation-delay:27.6s">sentryvo.com</div>
+  <p class="sub anim up" style="animation-delay:28s">No account needed · Plans from $30 first month</p>
+</section>
+
+<div class="foot"><span>SENTRYVO.COM</span><span>PROTECT WHAT YOU CREATE</span></div>
+
+<script>
+// Radar for scene 2, drawn from the time so every frame is exact.
+const cv = document.getElementById('radar'), cx = cv.getContext('2d');
+const blips = [
+  { a: -2.2, r: .7, c: '#FF5A9D', l: 'reddit.com', t: 5.5 },
+  { a: -.6, r: .55, c: '#F2A33A', l: 't.me', t: 6.1 },
+  { a: .5, r: .78, c: '#FF5A9D', l: 'leakhub.cc', t: 6.7 },
+  { a: 2.5, r: .35, c: '#2FCFB4', l: 'google images', t: 7.3 },
+  { a: 2.0, r: .8, c: '#FF5A9D', l: 'pirate-tube.xyz', t: 7.9 },
+];
+function drawRadar(s) {
+  const W = 920, c = W / 2, R = c - 10;
+  cx.clearRect(0, 0, W, W);
+  cx.strokeStyle = 'rgba(239,234,247,.13)'; cx.lineWidth = 2;
+  [1, .75, .5, .25].forEach((k) => { cx.beginPath(); cx.arc(c, c, R * k, 0, 6.283); cx.stroke(); });
+  cx.beginPath(); cx.moveTo(c - R, c); cx.lineTo(c + R, c); cx.moveTo(c, c - R); cx.lineTo(c, c + R); cx.stroke();
+  for (let i = 0; i < 72; i++) { const a = i / 72 * 6.283, l = i % 6 ? 8 : 18; cx.beginPath(); cx.moveTo(c + Math.cos(a) * R, c + Math.sin(a) * R); cx.lineTo(c + Math.cos(a) * (R - l), c + Math.sin(a) * (R - l)); cx.stroke(); }
+  const sweep = -Math.PI / 2 + Math.max(0, s - 4) * 2.4;
+  for (let i = 0; i < 50; i++) {
+    const a1 = sweep - 1.2 * (i / 50), a0 = sweep - 1.2 * ((i + 1) / 50);
+    cx.beginPath(); cx.moveTo(c, c); cx.arc(c, c, R, a0, a1); cx.closePath();
+    cx.fillStyle = `rgba(255,90,157,${(0.28 * (1 - i / 50)).toFixed(3)})`; cx.fill();
+  }
+  cx.strokeStyle = '#FF5A9D'; cx.lineWidth = 5; cx.lineCap = 'round';
+  cx.beginPath(); cx.moveTo(c, c); cx.lineTo(c + Math.cos(sweep) * R, c + Math.sin(sweep) * R); cx.stroke();
+  cx.font = '500 26px "Martian Mono", monospace';
+  for (const b of blips) {
+    if (s < b.t) continue;
+    const k = Math.min(1, (s - b.t) / .35), x = c + Math.cos(b.a) * R * b.r, y = c + Math.sin(b.a) * R * b.r;
+    const pulse = 1 + .5 * Math.max(0, 1 - (s - b.t) / .8);
+    cx.globalAlpha = k;
+    cx.fillStyle = b.c + '33'; cx.beginPath(); cx.arc(x, y, 34 * pulse, 0, 6.283); cx.fill();
+    cx.fillStyle = b.c; cx.beginPath(); cx.arc(x, y, 12, 0, 6.283); cx.fill();
+    cx.fillStyle = 'rgba(239,234,247,.85)';
+    const right = x < c + R * .35;
+    cx.textAlign = right ? 'left' : 'right'; cx.fillText(b.l, x + (right ? 28 : -28), y + 9);
+    cx.globalAlpha = 1;
+  }
+  cx.fillStyle = '#FF5A9D'; cx.beginPath(); cx.arc(c, c, 14, 0, 6.283); cx.fill();
+}
+let anims = [];
+window.renderAt = (ms) => {
+  if (!anims.length) anims = document.getAnimations();
+  for (const a of anims) { a.pause(); a.currentTime = ms; }
+  drawRadar(ms / 1000);
+};
+window.DURATION = 31;
+</script>
+</body></html>

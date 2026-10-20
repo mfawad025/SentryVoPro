@@ -1,10 +1,11 @@
 const { chromium } = require('playwright');
-// usage: node record.js <html> <outdir> stills|frames [fps]
+// usage: node record.js <html> <outdir> stills|frames [fps] [WIDTHxHEIGHT]
 (async () => {
-  const [html, out, mode, fpsArg] = process.argv.slice(2);
+  const [html, out, mode, fpsArg, size] = process.argv.slice(2);
+  const [W, H] = (size || '1080x1920').split('x').map(Number);
   const fps = Number(fpsArg || 30);
   const b = await chromium.launch();
-  const p = await b.newPage({ viewport: { width: 1080, height: 1920 } });
+  const p = await b.newPage({ viewport: { width: W, height: H } });
   await p.goto('file://' + html, { waitUntil: 'networkidle' });
   await p.evaluate(() => document.fonts.ready);
   await p.waitForTimeout(500);

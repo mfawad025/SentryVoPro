@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout — SentryVo</title>
+<!-- Stand-in for the hosted checkout, used only to record the purchase demo
+     video (record-purchase.js). It is never deployed or linked from the site. -->
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Instrument+Sans:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Instrument Sans',system-ui,sans-serif;color:#1A1530;background:#fff;min-height:100vh}
+  .wrap{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+  .sum{background:#F4F2F8;padding:56px 56px 40px;display:flex;flex-direction:column;align-items:flex-end}
+  .sum-in,.form-in{width:100%;max-width:420px}
+  .form{padding:56px}
+  .brand{display:flex;align-items:center;gap:10px;font-family:'Unbounded',sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:34px}
+  .brand svg{width:30px;height:30px;color:#1A1530}
+  .sweep{transform-origin:32px 32px;animation:spin 3s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .lab{font-size:.86rem;color:#5D5677}
+  .price{font-family:'Unbounded',sans-serif;font-weight:700;font-size:2.3rem;margin:6px 0 4px}
+  .then{font-size:.86rem;color:#5D5677;margin-bottom:30px}
+  .row{display:flex;justify-content:space-between;padding:12px 0;font-size:.92rem;border-bottom:1px solid rgba(26,21,48,.08)}
+  .row b{font-weight:600}
+  .row.disc span:last-child{color:#0B8F7C;font-weight:600}
+  .row.tot{border:0;font-weight:700;font-size:1rem}
+  .item{display:flex;gap:14px;align-items:center;padding:4px 0 18px}
+  .thumb{width:46px;height:46px;border-radius:10px;background:#1A1530;display:grid;place-items:center;flex:none}
+  .thumb svg{width:28px;height:28px;color:#EFEAF7}
+  .item small{display:block;color:#857E9E;font-size:.8rem;margin-top:2px}
+  h2{font-size:1.15rem;font-weight:700;margin-bottom:20px}
+  label{display:block;font-size:.8rem;font-weight:600;color:#5D5677;margin:0 0 7px}
+  .in{border:1px solid rgba(26,21,48,.18);border-radius:9px;padding:12px 13px;font-size:.95rem;min-height:45px;background:#fff;display:flex;align-items:center;gap:8px;margin-bottom:16px;font-family:inherit;width:100%;color:#1A1530}
+  .in.focus{border-color:#D82F74;box-shadow:0 0 0 3px rgba(216,47,116,.15)}
+  .in .ph{color:#A9A3BD}
+  .card{border-radius:9px 9px 0 0;margin-bottom:0}
+  .split{display:grid;grid-template-columns:1fr 1fr}
+  .split .in{border-radius:0;border-top:0;margin-bottom:16px}
+  .split .in:first-child{border-radius:0 0 0 9px;border-right:0}
+  .split .in:last-child{border-radius:0 0 9px 0}
+  .brands{margin-left:auto;display:flex;gap:4px}
+  .brands i{display:block;width:30px;height:20px;border-radius:4px;background:#EBE7F2;font-style:normal;font-size:.55rem;font-weight:700;display:grid;place-items:center;color:#5D5677}
+  .pay{width:100%;border:0;border-radius:10px;padding:16px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:.95rem;background:#1A1530;color:#fff;margin-top:8px;display:flex;justify-content:center;align-items:center;gap:10px;transition:background .3s}
+  .pay.busy{background:#3a3354}
+  .pay.done{background:#0B8F7C}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin2 .7s linear infinite;display:none}
+  .pay.busy .spin{display:block}
+  @keyframes spin2{to{transform:rotate(360deg)}}
+  .secure{margin-top:18px;font-size:.78rem;color:#857E9E;text-align:center}
+  .test{display:inline-block;margin-bottom:18px;font-family:'Martian Mono',monospace;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;background:rgba(199,122,18,.14);color:#9a5d0c;border-radius:6px;padding:5px 9px}
+  @media (max-width:800px){
+    .wrap{grid-template-columns:1fr;min-height:0}
+    .sum{padding:26px 22px 18px;align-items:stretch}
+    .form{padding:22px}
+    .sum-in,.form-in{max-width:none}
+    .brand{margin-bottom:16px}
+    .price{font-size:1.8rem}
+    .then{margin-bottom:10px}
+    .row{padding:8px 0;font-size:.86rem}
+    .item{padding-bottom:8px}
+    .hide-m{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="sum"><div class="sum-in">
+    <div class="brand"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="currentColor" stroke-width="4" opacity=".35"/><g class="sweep"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#D82F74"/></g><circle cx="46" cy="42" r="3.2" fill="currentColor"/><circle cx="32" cy="32" r="5" fill="#D82F74"/></svg>SentryVo</div>
+    <div class="lab">Subscribe to SentryVo Content Protection</div>
+    <div class="price">$60.00 <span style="font-size:.9rem;font-family:'Instrument Sans';font-weight:500;color:#5D5677">today</span></div>
+    <div class="then">Then $100.00 per month. Cancel anytime.</div>
+    <div class="item hide-m"><div class="thumb"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg></div><div><b>Multiple Keywords/Accounts</b><small>Unlimited stage names · scans every 6 hours · daily report</small></div></div>
+    <div class="row"><span>Subtotal</span><b>$100.00</b></div>
+    <div class="row disc"><span>First-month discount</span><span>−$40.00</span></div>
+    <div class="row tot"><span>Total due today</span><span>$60.00</span></div>
+  </div></div>
+  <div class="form"><div class="form-in">
+    <span class="test">Demo · test card</span>
+    <h2>Pay with card</h2>
+    <label>Email</label>
+    <div class="in" id="f-email"><span class="v"></span></div>
+    <label>Card information</label>
+    <div class="in card" id="f-card"><span class="v"></span><span class="ph">1234 1234 1234 1234</span><span class="brands"><i>VISA</i><i>MC</i><i>AMEX</i></span></div>
+    <div class="split">
+      <div class="in" id="f-exp"><span class="v"></span><span class="ph">MM / YY</span></div>
+      <div class="in" id="f-cvc"><span class="v"></span><span class="ph">CVC</span></div>
+    </div>
+    <label>Name on card</label>
+    <div class="in" id="f-name"><span class="v"></span><span class="ph">Full name</span></div>
+    <label>Country</label>
+    <div class="in"><span>United States</span><span style="margin-left:auto;color:#857E9E">▾</span></div>
+    <button class="pay" id="pay"><span class="spin"></span><span id="pay-t">Pay $60.00</span></button>
+    <p class="secure">🔒 Secure checkout · payments processed by Lemon Squeezy</p>
+  </div></div>
+</div>
+<script>
+  // Driven by the recorder: fill(id, text) shows typed text, focus(id) moves the focus ring.
+  window.demo = {
+    focus(id) { document.querySelectorAll('.in').forEach((e) => e.classList.toggle('focus', e.id === id)); },
+    fill(id, text) {
+      const el = document.getElementById(id);
+      el.querySelector('.v').textContent = text;
+      const ph = el.querySelector('.ph');
+      if (ph) ph.style.display = text ? 'none' : '';
+    },
+    pay(state) {
+      const b = document.getElementById('pay');
+      b.classList.toggle('busy', state === 'busy');
+      b.classList.toggle('done', state === 'done');
+      document.getElementById('pay-t').textContent = state === 'busy' ? 'Processing…' : state === 'done' ? '✓ Payment complete' : 'Pay $60.00';
+    },
+  };
+</script>
+</body>
+</html>

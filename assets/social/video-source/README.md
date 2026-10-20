@@ -8,11 +8,32 @@
 | `../sentryvo-demo2-vertical-1080x1920.mp4` | 9:16, 26 s | Video 2, "The last 72 hours of a leak" |
 | `../sentryvo-demo2-landscape-1920x1080.mp4` | 16:9, 26 s | Video 2, landscape |
 | `../sentryvo-demo2-music.m4a` | audio only | Video 2 soundtrack |
+| `../sentryvo-demo3-vertical-1080x1920.mp4` | 9:16, 57 s | Video 3, "How to get protected" (buying a plan) |
+| `../sentryvo-demo3-landscape-1920x1080.mp4` | 16:9, 55 s | Video 3, landscape |
+| `../sentryvo-demo3-music-vertical.m4a`, `-landscape.m4a` | audio only | Video 3 soundtracks (one per version, the timings differ) |
 
 Video 1 (31 s, "Leaked today. Gone tomorrow."): `promo.html`, `promo-landscape.html`, `make_music.py`.
 Video 2 (26 s, the 72-hour case): `promo2.html` (open with `#land` for landscape), `make_music2.py`.
 Record video 2 with `node record.js "$PWD/promo2.html" frames frames 30 1080x1920` and
 `node record.js "$PWD/promo2.html#land" lframes frames 30 1920x1080`.
+
+Video 3 (the purchase walkthrough) is a recording of the real site pages, not
+an animation: `record-purchase.js` serves this repo at www.sentryvo.com inside
+Playwright, answers every backend call with made-up example data (customer
+"Luna Demo", luna.demo@example.com, `.example` leak links), and shows
+`checkout-demo.html` in place of the hosted checkout. Nothing real is created.
+It also writes `events.json` (clicks, typing, page changes, steps), which
+`make_music3.py` uses to place the sound effects:
+
+```bash
+node record-purchase.js "$PWD/land" landscape     # or: "$PWD/vert" vertical
+python3 make_music3.py land/events.json land-music.wav
+ffmpeg -i land-music.wav -af loudnorm=I=-14:TP=-1.5:LRA=11 -c:a aac -b:a 192k land-music.m4a
+ffmpeg -framerate 30 -i land/f%05d.jpg -i land-music.m4a -c:v libx264 -pix_fmt yuv420p -crf 18 -c:a copy -shortest -movflags +faststart ../sentryvo-demo3-landscape-1920x1080.mp4
+```
+
+Re-record it after changing the sign-up form, checkout flow or dashboard so the
+video keeps matching the site.
 
 `promo.html` (vertical) and `promo-landscape.html` share one timeline, so the
 same soundtrack fits both. `record.js` steps through the page frame by frame.

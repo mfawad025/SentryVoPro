@@ -10,7 +10,8 @@ const { chromium } = require('playwright');
   await p.evaluate(() => document.fonts.ready);
   await p.waitForTimeout(500);
   const dur = await p.evaluate(() => window.DURATION);
-  const times = mode === 'stills' ? [1.0, 2.6, 6.5, 8.4, 12.8, 15.9, 17.2, 20.4, 24.5, 29.5] : Array.from({ length: Math.round(dur * fps) }, (_, i) => i / fps);
+  const stillTimes = process.env.STILLS ? process.env.STILLS.split(',').map(Number) : [1.0, 2.6, 6.5, 8.4, 12.8, 15.9, 17.2, 20.4, 24.5, 29.5];
+  const times = mode === 'stills' ? stillTimes : Array.from({ length: Math.round(dur * fps) }, (_, i) => i / fps);
   let i = 0;
   for (const t of times) {
     await p.evaluate((ms) => window.renderAt(ms), t * 1000);

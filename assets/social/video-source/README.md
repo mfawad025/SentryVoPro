@@ -1,10 +1,18 @@
-# SentryVo demo videos (31 s, with music)
+# SentryVo demo videos (with original music)
 
 | File | Size | For |
 |---|---|---|
 | `../sentryvo-demo-vertical-1080x1920.mp4` | 9:16 | Reels, TikTok, Shorts, stories, X/LinkedIn mobile |
 | `../sentryvo-demo-landscape-1920x1080.mp4` | 16:9 | YouTube, LinkedIn, X, website |
 | `../sentryvo-demo-music.m4a` | audio only | the soundtrack on its own |
+| `../sentryvo-demo2-vertical-1080x1920.mp4` | 9:16, 26 s | Video 2, "The last 72 hours of a leak" |
+| `../sentryvo-demo2-landscape-1920x1080.mp4` | 16:9, 26 s | Video 2, landscape |
+| `../sentryvo-demo2-music.m4a` | audio only | Video 2 soundtrack |
+
+Video 1 (31 s, "Leaked today. Gone tomorrow."): `promo.html`, `promo-landscape.html`, `make_music.py`.
+Video 2 (26 s, the 72-hour case): `promo2.html` (open with `#land` for landscape), `make_music2.py`.
+Record video 2 with `node record.js "$PWD/promo2.html" frames frames 30 1080x1920` and
+`node record.js "$PWD/promo2.html#land" lframes frames 30 1920x1080`.
 
 `promo.html` (vertical) and `promo-landscape.html` share one timeline, so the
 same soundtrack fits both. `record.js` steps through the page frame by frame.

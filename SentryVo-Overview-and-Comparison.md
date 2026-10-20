@@ -84,7 +84,7 @@
 10. **Hourly scans** if Serper credits allow (set `SCAN_INTERVAL_HOURS_MULTI=1`).
 
 ### Running cost note
-Each scan costs Serper credits (roughly 3-6 queries per alias, plus up to 4 Google Lens queries per client per day). Moving Multiple clients from daily to every 6 hours multiplies their search cost by about 4. Watch the Serper dashboard after deploying and adjust `SCAN_INTERVAL_HOURS_MULTI` / `LENS_IMAGES_PER_DAY` if needed.
+Each scan costs Serper credits (roughly 7-9 queries per alias, plus up to 4 Google Lens queries per client per day). Moving Multiple clients from daily to every 6 hours multiplies their search cost by about 4. Watch the Serper dashboard after deploying and adjust `SCAN_INTERVAL_HOURS_MULTI` / `LENS_IMAGES_PER_DAY` if needed.
 
 ---
 

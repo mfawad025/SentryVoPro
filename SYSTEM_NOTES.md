@@ -15,7 +15,7 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 - A result is kept only if it names an alias in URL/title, or its thumbnail matches the searched photo or a stored fingerprint (dHash, <= 5 bits). Saved with `source = 'serper_lens'`, shown as "Reverse image", included in the admin digest. Not facial recognition.
 
 ## Scanning (server/scanner.js)
-- Serper.dev Google search, `num: 100` (paid credits). Text queries per alias, plus Telegram (`t.me`) and a rotating slice of known leak sites. Image queries on Google Images.
+- Serper.dev Google search, `num: 100` (paid credits). Text queries per alias, plus Telegram (`t.me`) and a rotating slice of known leak sites. Google Images queries use the same leak terms as web (`"alias" leaked`, `"alias" nude`).
 - **Relevance rules**
   - Web results: alias must be in the page URL or title (NOT Google's snippet). Matching ignores spaces, dashes, underscores, case; each field checked separately.
   - Google Images results: if the client has fingerprints, only a photo match counts (distance <= 5 of 64 bits, `FINGERPRINT_MAX_DISTANCE`); otherwise alias in URL/title.
@@ -33,9 +33,13 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 - Client report email on plan cadence: multi = daily, single = every 3 days, **admin-added (source `fiverr`) clients = daily** with a BCC copy to `ADMIN_DIGEST_EMAIL` (or `SMTP_USER`). 2-hour grace so daily reports are not skipped.
 - `sendDailyReportEmail` throws if SMTP is not configured (no silent "success").
 
-## Admin digest (daily, after the scan) — manual reporting
-- One email to `ADMIN_DIGEST_EMAIL` listing, per client: (1) major-platform links with their report forms, (2) **every page/image found via Google (web, image, search_expand), to submit to Google's DMCA form**, plus an attached `.txt` of those links.
-- Each leak is sent once (`admin_digest_sent_at`). Google TCRP was REJECTED, so submissions to Google are manual.
+## Admin digest (daily) — manual reporting
+- One email to `ADMIN_DIGEST_EMAIL`, per client, in three lists, each link with its button beside it:
+  1. **Web links** (Google Search pages: `serper_web`, `search_expand`) → "Report to Google" (Google DMCA form).
+  2. **Google Images links** (`serper_image`, `serper_lens`) → "Report to Google"; shows the page and the image file.
+  3. **Big platforms** (`manual_review`) → "Report on <platform>" (that platform's copyright form).
+- Attached `.txt` has the Google links grouped into web and image sections. Each leak is sent once (`admin_digest_sent_at`). Google TCRP was REJECTED, so submissions to Google are manual.
+- Join / sign-up / redirect pages (`/join`, `/signup`, `/go`, `/out`, ...) are never saved or reported: they hold no copyrighted content, so a DMCA notice for them would be invalid.
 
 ## Admin endpoints (all need `?key=ADMIN_SECRET_KEY`)
 - `/api/admin/send-report?email=&scan=1` — send a client's full report now.

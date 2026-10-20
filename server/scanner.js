@@ -287,8 +287,11 @@ async function runReverseImageSearch(user, aliases, originalLinks, fingerprints)
   return out;
 }
 
+// Google Images gets the same leak terms as the web search ("kitsykat
+// leaked", "kitsykat nude"), so pictures are found for every term, not
+// just one "leaked photos" phrase.
 function buildImageQueries(alias) {
-  return [`"${alias}" leaked photos`];
+  return LEAK_TERMS.map((term) => `"${alias}" ${term}`);
 }
 
 function guessAbuseEmail(url) {

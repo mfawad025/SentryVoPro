@@ -215,50 +215,64 @@ async function sendWelcomeSetPasswordEmail(toAddress, resetUrl, creatorName) {
  * (see admin_digest_sent_at in db.js) — the caller is responsible for
  * marking them sent after this succeeds, so nothing repeats daily forever.
  */
+// Which list a leak goes in: big platforms are reported on the platform
+// itself; everything else found through Google is reported to Google,
+// split into web pages and images (Google Images and reverse image search).
+function digestGroup(leak) {
+  if (leak.status === 'manual_review') return 'platforms';
+  if (leak.source === 'serper_image' || leak.source === 'serper_lens') return 'images';
+  return 'web';
+}
+
 function buildAdminDigestHtml(leaks) {
   const byCreator = {};
   for (const leak of leaks) {
     const key = leak.creator_email;
-    if (!byCreator[key]) byCreator[key] = { name: leak.creator_name, email: leak.creator_email, platforms: [], images: [] };
-    if (leak.status === 'manual_review') {
-      byCreator[key].platforms.push(leak);
-    } else {
-      // Pages and images found through Google — to be delisted from Google.
-      byCreator[key].images.push(leak);
-    }
+    if (!byCreator[key]) byCreator[key] = { name: leak.creator_name, email: leak.creator_email, web: [], images: [], platforms: [] };
+    byCreator[key][digestGroup(leak)].push(leak);
   }
 
-  const sections = Object.values(byCreator).map((creator) => {
-    const platformRows = creator.platforms.map((leak) => `
-      <tr>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee;">${esc(leak.url)}</td>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee;"><a href="${esc(getMajorPlatformReportLink(leak.url) || '#')}">${getMajorPlatformReportLink(leak.url) ? 'Report here' : 'No known form'}</a></td>
-      </tr>`).join('');
+  const cell = 'padding:7px 10px; border-bottom:1px solid #eee; vertical-align:top;';
+  const action = (href, label) => `<td style="${cell} white-space:nowrap; text-align:right;"><a href="${esc(href)}" style="color:#D82F74; font-weight:bold; text-decoration:none;">${label}</a></td>`;
+  const table = (title, note, rows) => rows ? `
+        <p style="margin:18px 0 2px; font-weight:bold;">${title}</p>
+        <p style="margin:0 0 6px; font-size:.8rem; color:#666;">${note}</p>
+        <table style="width:100%; border-collapse:collapse; font-size:.85rem;">${rows}</table>` : '';
 
-    const imageRows = creator.images.map((leak) => `
-      <tr>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee; word-break:break-all;">${esc(googleDelistUrl(leak) || leak.url)}</td>
-        <td style="padding:6px 10px; border-bottom:1px solid #eee;"><a href="${GOOGLE_DMCA_FORM_URL}">Google DMCA form</a></td>
-      </tr>`).join('');
+  const sections = Object.values(byCreator).map((creator) => {
+    const webRows = creator.web.map((leak) => `
+      <tr><td style="${cell} word-break:break-all;">${esc(googleDelistUrl(leak) || leak.url)}</td>${action(GOOGLE_DMCA_FORM_URL, 'Report to Google')}</tr>`).join('');
+
+    // For Google Images the page is what gets delisted; the image file is
+    // shown underneath because Google's form also accepts it.
+    const imageRows = creator.images.map((leak) => {
+      const page = googleDelistUrl(leak) || leak.url;
+      const file = page !== leak.url ? `<br><span style="color:#888; font-size:.78rem;">Image: ${esc(leak.url)}</span>` : '';
+      return `
+      <tr><td style="${cell} word-break:break-all;">${esc(page)}${file}</td>${action(GOOGLE_DMCA_FORM_URL, 'Report to Google')}</tr>`;
+    }).join('');
+
+    const platformRows = creator.platforms.map((leak) => {
+      const form = getMajorPlatformReportLink(leak.url);
+      let host = '';
+      try { host = new URL(leak.url).hostname.replace(/^www\./, ''); } catch { /* keep empty */ }
+      return `
+      <tr><td style="${cell} word-break:break-all;">${esc(leak.url)}</td>${form ? action(form, `Report on ${esc(host)}`) : `<td style="${cell} text-align:right; color:#888;">No known form</td>`}</tr>`;
+    }).join('');
 
     return `
-      <h3 style="margin-top:28px;">${esc(creator.name)} (${esc(creator.email)})</h3>
-      ${creator.platforms.length ? `
-        <p style="margin:8px 0 4px; font-weight:bold;">Platforms (${creator.platforms.length})</p>
-        <table style="width:100%; border-collapse:collapse; font-size:.85rem;">${platformRows}</table>
-      ` : ''}
-      ${creator.images.length ? `
-        <p style="margin:16px 0 4px; font-weight:bold;">Indexed on Google — submit for delisting (${creator.images.length})</p>
-        <table style="width:100%; border-collapse:collapse; font-size:.85rem;">${imageRows}</table>
-      ` : ''}
+      <h3 style="margin:30px 0 0; padding-top:14px; border-top:2px solid #1A1530;">${esc(creator.name)} <span style="font-weight:normal; color:#666; font-size:.85rem;">(${esc(creator.email)})</span></h3>
+      ${table(`Web links (${creator.web.length})`, 'Pages found in Google Search. Report each to Google for removal from search results.', webRows)}
+      ${table(`Google Images links (${creator.images.length})`, 'Pictures found in Google Images or by reverse image search. Report each to Google; in the form choose Google Image Search.', imageRows)}
+      ${table(`Big platforms (${creator.platforms.length})`, 'Report these on the platform itself, using its copyright form.', platformRows)}
     `;
   }).join('');
 
   return `
-    <div style="font-family:Arial,sans-serif; max-width:640px; margin:0 auto; color:#1a1a2e;">
-      <h2 style="color:#0096F5;">SentryVo — Admin Manual Review Digest</h2>
-      <p>${leaks.length} item(s) across ${Object.keys(byCreator).length} creator(s) need manual reporting today.</p>
-      <p style="font-size:.85rem; color:#555;">"Indexed on Google" links are pages and images that appear in Google results. Paste them into <a href="${GOOGLE_DMCA_FORM_URL}">Google's DMCA form</a>. A text file with the same links, one per line, is attached for copy-and-paste.</p>
+    <div style="font-family:Arial,sans-serif; max-width:680px; margin:0 auto; color:#1A1530;">
+      <h2 style="color:#D82F74; margin-bottom:4px;">SentryVo · Links to report today</h2>
+      <p style="margin-top:0;">${leaks.length} link(s) across ${Object.keys(byCreator).length} creator(s).</p>
+      <p style="font-size:.85rem; color:#555;">Each link has its report button beside it. The attached text file has the same Google links, grouped into web and image links, for copy and paste.</p>
       ${sections}
     </div>
   `;
@@ -271,26 +285,30 @@ async function sendAdminDigestEmail(leaks) {
   }
   const adminEmail = process.env.ADMIN_DIGEST_EMAIL || process.env.SMTP_USER;
 
-  // Plain-text list of the Google links, grouped by creator, for pasting
-  // into Google's form.
+  // Plain-text list of the Google links, grouped by creator and by web /
+  // image, for pasting into Google's form.
   const lines = [];
-  const seenByCreator = {};
+  const byCreator = {};
   for (const leak of leaks) {
-    if (leak.status === 'manual_review') continue;
+    const group = digestGroup(leak);
+    if (group === 'platforms') continue;
     const url = googleDelistUrl(leak);
     if (!url) continue;
     const key = `${leak.creator_name} (${leak.creator_email})`;
-    seenByCreator[key] = seenByCreator[key] || new Set();
-    seenByCreator[key].add(url);
+    byCreator[key] = byCreator[key] || { web: new Set(), images: new Set() };
+    byCreator[key][group].add(url);
   }
-  for (const [creator, urls] of Object.entries(seenByCreator)) {
-    lines.push(`# ${creator} — ${urls.size} link(s)`, ...urls, '');
+  for (const [creator, g] of Object.entries(byCreator)) {
+    lines.push(`# ${creator}`);
+    if (g.web.size) lines.push(`## Web links (${g.web.size})`, ...g.web);
+    if (g.images.size) lines.push(`## Google Images links (${g.images.size})`, ...g.images);
+    lines.push('');
   }
 
   await mailer.sendMail({
     from: process.env.REPORT_FROM_EMAIL,
     to: adminEmail,
-    subject: `SentryVo — ${leaks.length} item(s) need manual reporting today`,
+    subject: `SentryVo — ${leaks.length} link(s) to report today`,
     html: buildAdminDigestHtml(leaks),
     attachments: lines.length
       ? [{ filename: `google-delist-links-${new Date().toISOString().slice(0, 10)}.txt`, content: lines.join('\n'), contentType: 'text/plain' }]
@@ -304,5 +322,6 @@ module.exports = {
   sendTestEmail,
   sendPasswordResetEmail,
   sendAdminDigestEmail,
+  buildAdminDigestHtml,
   sendWelcomeSetPasswordEmail,
 };

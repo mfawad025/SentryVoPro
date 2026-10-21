@@ -774,6 +774,40 @@ app.all('/api/cron/tick', (req, res) => {
   res.status(202).json({ ok: true, started: true });
 });
 
+// ---------------- Schedule status ----------------
+// https://api.sentryvo.com/api/admin/schedule-status?key=ADMIN_KEY
+// Shows whether the hourly check is running, and for every active client
+// when they were last scanned / emailed and when the next of each is due.
+app.get('/api/admin/schedule-status', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const { scheduleStatus } = require('./cron');
+    const { scanIntervalHours, isScanDue } = require('./scanner');
+    const hour = 60 * 60 * 1000;
+    const at = (ms) => (ms ? new Date(ms).toISOString() : null);
+    const clients = (await db.getActiveUsers()).map((u) => {
+      const lastScan = u.last_scan_at ? new Date(u.last_scan_at).getTime() : null;
+      const lastReport = u.last_report_at ? new Date(u.last_report_at).getTime() : null;
+      return {
+        id: u.id,
+        email: u.email,
+        plan: u.plan,
+        scanEveryHours: scanIntervalHours(u),
+        reportEveryDays: u.report_frequency_days,
+        lastScanAt: at(lastScan),
+        scanDueNow: isScanDue(u),
+        lastReportAt: at(lastReport),
+        nextReportAround: lastReport ? at(lastReport + u.report_frequency_days * 24 * hour - 2 * hour) : 'next scan',
+        reportDueNow: db.isReportDue(u),
+      };
+    });
+    res.json({ ok: true, ...scheduleStatus(), activeClients: clients.length, clients });
+  } catch (err) {
+    console.error('Schedule status failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------- Manual trigger for testing the scan pipeline ----------------
 // GET version: just visit this URL directly in a browser, no extra tools needed.
 app.get('/api/scan/run-now', async (req, res) => {

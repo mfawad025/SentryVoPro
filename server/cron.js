@@ -1,6 +1,6 @@
 require('dotenv').config();
 const cron = require('node-cron');
-const { runDailyScanForAllUsers } = require('./scanner');
+const { runDailyScanForAllUsers, scanRunInfo } = require('./scanner');
 const db = require('./db');
 const { sendAdminDigestEmail } = require('./emailReport');
 
@@ -42,9 +42,11 @@ async function sendDailyDigestIfDue() {
 // /api/cron/tick, which an outside scheduler can call to wake a server that
 // sleeps when idle (e.g. Render's free plan, where node-cron never fires).
 let checkInProgress = false;
+let lastCheck = null;
 async function runScheduledCheck(source = 'cron') {
   if (checkInProgress) return { skipped: true };
   checkInProgress = true;
+  lastCheck = { source, at: new Date().toISOString() };
   try {
     const results = await runDailyScanForAllUsers();
     if (results.length) {
@@ -74,4 +76,8 @@ function startDailyScanCron() {
   console.log(`Scan check scheduled: "${schedule}"`);
 }
 
-module.exports = { startDailyScanCron, sendAdminDigestIfNeeded, runScheduledCheck };
+function scheduleStatus() {
+  return { lastCheck, checkInProgress, scanRun: scanRunInfo(), lastDigestDay, adminDigestHour: ADMIN_DIGEST_HOUR, serverTime: new Date().toString() };
+}
+
+module.exports = { startDailyScanCron, sendAdminDigestIfNeeded, runScheduledCheck, scheduleStatus };

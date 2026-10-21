@@ -72,6 +72,8 @@ async function runQuery(path, query) {
   return post(path, { q: query, num: 100 });
 }
 
+const SERPER_TIMEOUT_MS = 30000;
+
 async function post(path, body) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey || apiKey === 'your_serper_api_key') {
@@ -91,6 +93,9 @@ async function post(path, body) {
     // paid credits have likely run out or expired (6-month validity) —
     // check the Serper dashboard and drop this to 10 as a stopgap.
     body: JSON.stringify(body),
+    // Without a limit, one stalled request would hang the whole scan run,
+    // and every hourly check after it would be skipped as "still running".
+    timeout: SERPER_TIMEOUT_MS,
   });
 
   if (!res.ok) {

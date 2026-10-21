@@ -976,16 +976,26 @@ async function runDailyScanForUser(user) {
 // Scans every active client whose interval has passed (or everyone, with
 // force). Runs one at a time; a call while a run is still going is skipped,
 // so a long run can't overlap the next hourly check.
-let scanRunInProgress = false;
+// A run that has been going this long is treated as stuck (a request that
+// never returned), so it can't block every later check forever.
+const SCAN_RUN_STUCK_MS = 3 * 60 * 60 * 1000;
+let scanRunStartedAt = null;
 
 async function runDailyScanForAllUsers({ force = false } = {}) {
-  if (scanRunInProgress) {
-    console.log('Scan run skipped: the previous run is still going.');
-    return [];
+  if (scanRunStartedAt) {
+    const minutes = Math.round((Date.now() - scanRunStartedAt) / 60000);
+    if (Date.now() - scanRunStartedAt < SCAN_RUN_STUCK_MS) {
+      console.log(`Scan run skipped: the previous run is still going (started ${minutes} min ago).`);
+      return [];
+    }
+    console.warn(`Previous scan run looks stuck (started ${minutes} min ago); starting a new one.`);
   }
-  scanRunInProgress = true;
+  const startedAt = Date.now();
+  scanRunStartedAt = startedAt;
   try {
-    const users = (await db.getActiveUsers()).filter((u) => force || isScanDue(u));
+    const active = await db.getActiveUsers();
+    const users = active.filter((u) => force || isScanDue(u));
+    console.log(`Scan check: ${users.length} of ${active.length} active client(s) due${force ? ' (forced)' : ''}.`);
     const results = [];
     for (const user of users) {
       try {
@@ -996,8 +1006,13 @@ async function runDailyScanForAllUsers({ force = false } = {}) {
     }
     return results;
   } finally {
-    scanRunInProgress = false;
+    // Only clear our own run: a stuck run finishing late mustn't unlock a newer one.
+    if (scanRunStartedAt === startedAt) scanRunStartedAt = null;
   }
+}
+
+function scanRunInfo() {
+  return { running: Boolean(scanRunStartedAt), startedAt: scanRunStartedAt ? new Date(scanRunStartedAt).toISOString() : null };
 }
 
 // Allow running manually: `npm run scan-now`
@@ -1014,4 +1029,4 @@ if (require.main === module && process.argv.includes('--run-once')) {
     });
 }
 
-module.exports = { runDailyScanForUser, runDailyScanForAllUsers, scanIntervalHours, isScanDue, GOOGLE_REMOVAL_TOOL_URL };
+module.exports = { runDailyScanForUser, runDailyScanForAllUsers, scanIntervalHours, isScanDue, scanRunInfo, GOOGLE_REMOVAL_TOOL_URL };

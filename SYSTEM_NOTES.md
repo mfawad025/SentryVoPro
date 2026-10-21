@@ -6,6 +6,8 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 ## Scan schedule (server/cron.js + scanner.js)
 - Hourly check (`SCAN_CHECK_CRON`, default `7 * * * *`). A client is scanned when their interval has passed since `users.last_scan_at`: Multiple and agency plans every `SCAN_INTERVAL_HOURS_MULTI` (6) hours, Single every `SCAN_INTERVAL_HOURS_SINGLE` (24). 20-minute grace. Runs never overlap.
 - `/api/scan/run-now` and `npm run scan-now` scan everyone regardless of schedule.
+- `/api/admin/schedule-status?key=ADMIN_KEY` shows the last hourly check, whether a scan run is in progress, and each active client's last/next scan and report.
+- Every hourly check logs `Scan check: X of Y active client(s) due.` A run going longer than 3 hours is treated as stuck and no longer blocks new checks; Serper requests time out after 30 s.
 - `/api/cron/tick?key=ADMIN_KEY` runs the same check as the hourly cron (due clients only, plus the daily admin digest). On a host that sleeps when idle (Render free plan), have cron-job.org call it every hour; otherwise nothing runs automatically.
 - Admin digest: once a day, after the first check at or after `ADMIN_DIGEST_HOUR` (8, server time).
 - Report emails are unchanged (plan cadence via `report_frequency_days`).

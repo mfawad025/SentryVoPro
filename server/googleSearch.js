@@ -64,6 +64,7 @@ async function searchGoogleLens(imageUrl) {
       title: item.title || '',
       snippet: [item.source, item.link].filter(Boolean).join(' '),
       thumbnail: item.thumbnailUrl || item.thumbnail || item.imageUrl || null,
+      image: item.imageUrl || null,
     }))
     .filter((m) => m.url);
 }

@@ -36,9 +36,15 @@ const MAX_REDIRECTS = 3;
  * flippedHash is the hash of the mirror image, so a horizontally flipped
  * re-upload (a common evasion trick) still matches.
  */
-async function hashImageBuffer(buffer) {
+async function hashImageBuffer(buffer, { minSize = 0 } = {}) {
   let pixels;
   try {
+    if (minSize) {
+      // Tiny previews hold too little detail: unrelated pictures with a
+      // similar layout can produce nearly the same hash.
+      const { width, height } = await sharp(buffer, { failOn: 'none' }).metadata();
+      if (!width || !height || Math.min(width, height) < minSize) return null;
+    }
     pixels = await sharp(buffer, { failOn: 'none', limitInputPixels: 100_000_000 })
       .rotate() // respect EXIF orientation
       .greyscale()
@@ -82,9 +88,9 @@ function hammingDistance(hexA, hexB) {
 
 /**
  * Compares a candidate image's hashes against a client's stored hashes.
- * Returns the smallest distance if it is within MAX_DISTANCE, else null.
+ * Returns the smallest distance if it is within maxDistance, else null.
  */
-function bestMatch(candidate, storedHashes) {
+function bestMatch(candidate, storedHashes, maxDistance = MAX_DISTANCE) {
   if (!candidate) return null;
   let best = null;
   for (const stored of storedHashes) {
@@ -94,7 +100,7 @@ function bestMatch(candidate, storedHashes) {
     );
     if (best === null || d < best) best = d;
   }
-  return best !== null && best <= MAX_DISTANCE ? best : null;
+  return best !== null && best <= maxDistance ? best : null;
 }
 
 // ---------- Safe remote image download ----------
@@ -192,10 +198,10 @@ async function downloadImage(url) {
   return got ? got.buffer : null;
 }
 
-async function hashImageUrl(url) {
+async function hashImageUrl(url, options) {
   const buffer = await downloadImage(url);
   if (!buffer) return null;
-  return hashImageBuffer(buffer);
+  return hashImageBuffer(buffer, options);
 }
 
 // ---------- Images inside a result page ----------

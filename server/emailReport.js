@@ -1,7 +1,7 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { buildLeakExcelBuffer } = require('./excelReport');
-const { GOOGLE_REMOVAL_TOOL_URL, GOOGLE_DMCA_FORM_URL, googleDelistUrl, getMajorPlatformReportLink } = require('./constants');
+const { GOOGLE_REMOVAL_TOOL_URL, GOOGLE_DMCA_FORM_URL, googleDelistUrl, getMajorPlatformReportLink, matchesAlias, leakActionUrl } = require('./constants');
 
 function getMailer() {
   if (!process.env.SMTP_HOST || process.env.SMTP_HOST === 'smtp.yourprovider.com') return null;
@@ -224,6 +224,21 @@ function digestGroup(leak) {
   return 'web';
 }
 
+// Why the scanner kept this link, in plain words, so the admin can judge it
+// at a glance.
+function leakReason(leak) {
+  const title = String(leak.title || '').replace(/^\[Verified match\] /, '');
+  if (leak.fingerprint_distance !== null && leak.fingerprint_distance !== undefined) {
+    return leak.source === 'serper_lens' ? 'Reverse image search: photo match' : 'Photo match with her original photos';
+  }
+  if (leak.source === 'search_expand') return "Listed with her name on the site's own search page";
+  const alias = leak.matched_alias || '';
+  const prefix = leak.source === 'serper_lens' ? 'Reverse image search: ' : leak.source === 'serper_image' ? 'Google Images: ' : '';
+  if (alias && matchesAlias(alias, leak.url)) return `${prefix}"${alias}" is in the address`;
+  if (title) return `${prefix}"${alias}" is in the page title: ${title.slice(0, 120)}`;
+  return `${prefix}matched "${alias}"`;
+}
+
 function buildAdminDigestHtml(leaks) {
   const byCreator = {};
   for (const leak of leaks) {
@@ -233,7 +248,11 @@ function buildAdminDigestHtml(leaks) {
   }
 
   const cell = 'padding:7px 10px; border-bottom:1px solid #eee; vertical-align:top;';
-  const action = (href, label) => `<td style="${cell} white-space:nowrap; text-align:right;"><a href="${esc(href)}" style="color:#D82F74; font-weight:bold; text-decoration:none;">${label}</a></td>`;
+  const link = (href, label, color = '#D82F74') => `<a href="${esc(href)}" style="color:${color}; font-weight:bold; text-decoration:none;">${label}</a>`;
+  // Report button, plus "Not a leak" (and "Approve" for big platforms) underneath.
+  const action = (href, label, leak, approve = false) => `<td style="${cell} white-space:nowrap; text-align:right;">${href ? link(href, label) : '<span style="color:#888;">No known form</span>'}
+        <br><span style="font-size:.78rem;">${approve ? `${link(leakActionUrl(leak.id, 'approve'), 'Approve', '#0B8F7C')} · ` : ''}${link(leakActionUrl(leak.id, 'dismiss'), 'Not a leak', '#888')}</span></td>`;
+  const why = (leak) => `<br><span style="color:#888; font-size:.78rem;">Why: ${esc(leakReason(leak))}</span>`;
   const table = (title, note, rows) => rows ? `
         <p style="margin:18px 0 2px; font-weight:bold;">${title}</p>
         <p style="margin:0 0 6px; font-size:.8rem; color:#666;">${note}</p>
@@ -241,7 +260,7 @@ function buildAdminDigestHtml(leaks) {
 
   const sections = Object.values(byCreator).map((creator) => {
     const webRows = creator.web.map((leak) => `
-      <tr><td style="${cell} word-break:break-all;">${esc(googleDelistUrl(leak) || leak.url)}</td>${action(GOOGLE_DMCA_FORM_URL, 'Report to Google')}</tr>`).join('');
+      <tr><td style="${cell} word-break:break-all;">${esc(googleDelistUrl(leak) || leak.url)}${why(leak)}</td>${action(GOOGLE_DMCA_FORM_URL, 'Report to Google', leak)}</tr>`).join('');
 
     // For Google Images the page is what gets delisted; the image file is
     // shown underneath because Google's form also accepts it.
@@ -249,22 +268,25 @@ function buildAdminDigestHtml(leaks) {
       const page = googleDelistUrl(leak) || leak.url;
       const file = page !== leak.url ? `<br><span style="color:#888; font-size:.78rem;">Image: ${esc(leak.url)}</span>` : '';
       return `
-      <tr><td style="${cell} word-break:break-all;">${esc(page)}${file}</td>${action(GOOGLE_DMCA_FORM_URL, 'Report to Google')}</tr>`;
+      <tr><td style="${cell} word-break:break-all;">${esc(page)}${file}${why(leak)}</td>${action(GOOGLE_DMCA_FORM_URL, 'Report to Google', leak)}</tr>`;
     }).join('');
 
     const platformRows = creator.platforms.map((leak) => {
       const form = getMajorPlatformReportLink(leak.url);
       let host = '';
       try { host = new URL(leak.url).hostname.replace(/^www\./, ''); } catch { /* keep empty */ }
+      const waiting = !leak.approved_at
+        ? '<br><span style="color:#C77A12; font-size:.78rem; font-weight:bold;">Waiting for your approval: the client sees it only after you approve.</span>'
+        : '';
       return `
-      <tr><td style="${cell} word-break:break-all;">${esc(leak.url)}</td>${form ? action(form, `Report on ${esc(host)}`) : `<td style="${cell} text-align:right; color:#888;">No known form</td>`}</tr>`;
+      <tr><td style="${cell} word-break:break-all;">${esc(leak.url)}${why(leak)}${waiting}</td>${action(form, `Report on ${esc(host)}`, leak, !leak.approved_at)}</tr>`;
     }).join('');
 
     return `
       <h3 style="margin:30px 0 0; padding-top:14px; border-top:2px solid #1A1530;">${esc(creator.name)} <span style="font-weight:normal; color:#666; font-size:.85rem;">(${esc(creator.email)})</span></h3>
       ${table(`Web links (${creator.web.length})`, 'Pages found in Google Search. Report each to Google for removal from search results.', webRows)}
       ${table(`Google Images links (${creator.images.length})`, 'Pictures found in Google Images or by reverse image search. Report each to Google; in the form choose Google Image Search.', imageRows)}
-      ${table(`Big platforms (${creator.platforms.length})`, 'Report these on the platform itself, using its copyright form.', platformRows)}
+      ${table(`Big platforms (${creator.platforms.length})`, 'Open each link first. If it really is her content, press Approve (the client then sees it) and report it on the platform with its copyright form. If not, press Not a leak.', platformRows)}
     `;
   }).join('');
 
@@ -272,7 +294,7 @@ function buildAdminDigestHtml(leaks) {
     <div style="font-family:Arial,sans-serif; max-width:680px; margin:0 auto; color:#1A1530;">
       <h2 style="color:#D82F74; margin-bottom:4px;">SentryVo · Links to report today</h2>
       <p style="margin-top:0;">${leaks.length} link(s) across ${Object.keys(byCreator).length} creator(s).</p>
-      <p style="font-size:.85rem; color:#555;">Each link has its report button beside it. The attached text file has the same Google links, grouped into web and image links, for copy and paste.</p>
+      <p style="font-size:.85rem; color:#555;">Each link has its report button beside it and the reason it was flagged under it. "Not a leak" removes a wrong link from the client's dashboard and future reports. The attached text file has the same Google links, grouped into web and image links, for copy and paste.</p>
       ${sections}
     </div>
   `;
@@ -323,5 +345,6 @@ module.exports = {
   sendPasswordResetEmail,
   sendAdminDigestEmail,
   buildAdminDigestHtml,
+  leakReason,
   sendWelcomeSetPasswordEmail,
 };

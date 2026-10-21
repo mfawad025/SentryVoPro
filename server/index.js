@@ -760,6 +760,87 @@ app.post('/api/agency/add-creator', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- One-click leak actions from the admin digest email ----------------
+// "Not a leak" and "Approve" links in the digest open a confirmation page;
+// the change only happens when the button on that page is pressed (POST),
+// so mail scanners that open links automatically can't trigger it. Each
+// link is signed for one leak and one action (leakActionToken).
+function leakActionPage(title, body) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtmlServer(title)} · SentryVo</title></head>
+<body style="margin:0;background:#F4F2F8;font-family:Arial,sans-serif;color:#1A1530">
+<div style="max-width:560px;margin:40px auto;padding:28px;background:#fff;border-radius:14px;border:1px solid #e3dfeb">
+<h2 style="margin:0 0 14px;color:#D82F74">${escapeHtmlServer(title)}</h2>${body}</div></body></html>`;
+}
+
+function escapeHtmlServer(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function checkLeakAction(params, res) {
+  const { LEAK_ACTIONS, leakActionToken } = require('./constants');
+  const id = Number(params.id);
+  const action = String(params.a || '');
+  if (!process.env.ADMIN_SECRET_KEY || !Number.isInteger(id) || !LEAK_ACTIONS.includes(action)
+      || !safeEqual(String(params.t || ''), leakActionToken(id, action))) {
+    res.status(403).send(leakActionPage('Link not valid', '<p>This link is not valid. Use the buttons in the latest SentryVo digest email.</p>'));
+    return null;
+  }
+  const leak = await db.getLeakById(id);
+  if (!leak) {
+    res.status(404).send(leakActionPage('Link not found', '<p>This link is no longer in SentryVo.</p>'));
+    return null;
+  }
+  return { id, action, leak };
+}
+
+app.get('/api/leak-action', async (req, res) => {
+  try {
+    const found = await checkLeakAction(req.query, res);
+    if (!found) return;
+    const { id, action, leak } = found;
+    const user = await db.getUserById(leak.user_id);
+    const what = action === 'approve'
+      ? 'Approve this link? The client will see it in their dashboard and next report.'
+      : 'Mark this link as not a leak? It will be removed from the client\'s dashboard and future reports, and no takedown will be sent for it.';
+    const done = leak.status === 'dismissed' ? '<p style="color:#888">This link is already marked as not a leak.</p>'
+      : action === 'approve' && leak.approved_at ? '<p style="color:#888">This link is already approved.</p>' : '';
+    res.send(leakActionPage(action === 'approve' ? 'Approve link' : 'Not a leak', `
+      <p style="word-break:break-all"><a href="${escapeHtmlServer(leak.url)}" target="_blank" rel="noopener noreferrer" style="color:#1A1530">${escapeHtmlServer(leak.url)}</a></p>
+      <p style="color:#5D5677;font-size:.9rem">Client: ${escapeHtmlServer(user ? `${user.name} (${user.email})` : `#${leak.user_id}`)}</p>
+      ${done || `<p>${what}</p>
+      <form method="post" action="/api/leak-action">
+        <input type="hidden" name="id" value="${id}"><input type="hidden" name="a" value="${action}"><input type="hidden" name="t" value="${escapeHtmlServer(req.query.t)}">
+        <button style="background:${action === 'approve' ? '#0B8F7C' : '#D82F74'};color:#fff;border:0;border-radius:8px;padding:12px 22px;font-size:1rem;font-weight:bold;cursor:pointer">${action === 'approve' ? 'Yes, approve' : 'Yes, not a leak'}</button>
+      </form>`}`));
+  } catch (err) {
+    console.error('Leak action page failed:', err.message);
+    res.status(500).send(leakActionPage('Something went wrong', '<p>Please try again in a moment.</p>'));
+  }
+});
+
+app.post('/api/leak-action', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const found = await checkLeakAction(req.body || {}, res);
+    if (!found) return;
+    const { id, action, leak } = found;
+    if (action === 'approve') {
+      if (leak.status === 'dismissed') {
+        return res.send(leakActionPage('Not approved', '<p>This link was already marked as not a leak, so it was not approved.</p>'));
+      }
+      await db.approveLeak(id);
+      console.log(`Leak ${id} approved by admin from the digest.`);
+      return res.send(leakActionPage('Approved', `<p>Done. The client will see this link in their dashboard and next report.</p><p style="word-break:break-all;color:#5D5677">${escapeHtmlServer(leak.url)}</p>`));
+    }
+    await db.markLeakStatus(id, 'dismissed');
+    console.log(`Leak ${id} marked not a leak by admin from the digest.`);
+    res.send(leakActionPage('Removed', `<p>Done. This link is marked as not a leak and won't appear in the client's dashboard or reports.</p><p style="word-break:break-all;color:#5D5677">${escapeHtmlServer(leak.url)}</p>`));
+  } catch (err) {
+    console.error('Leak action failed:', err.message);
+    res.status(500).send(leakActionPage('Something went wrong', '<p>Please try again in a moment.</p>'));
+  }
+});
+
 // ---------------- Scheduled check for an outside scheduler ----------------
 // For hosts that sleep when idle (Render free plan): have cron-job.org call
 // https://api.sentryvo.com/api/cron/tick?key=ADMIN_KEY every hour. It does
@@ -1453,10 +1534,10 @@ app.get('/api/admin/leak-debug', async (req, res) => {
     const user = await db.getUserByEmail(String(req.query.email || '').trim());
     if (!user) return res.status(404).json({ error: 'No client with that email' });
     const ids = String(req.query.dismiss || '').split(',').map((x) => Number(x)).filter(Boolean);
-    const own = new Set((await db.getAllLeaksForUser(user.id, { limit: 5000, offset: 0 })).map((l) => l.id));
+    const own = new Set((await db.getAllLeaksForUser(user.id, { limit: 5000, offset: 0, includeUnapproved: true })).map((l) => l.id));
     for (const id of ids) if (own.has(id)) await db.markLeakStatus(id, 'dismissed');
-    const leaks = (await db.getAllLeaksForUser(user.id, { limit: 60, offset: 0 })).map((l) => ({
-      id: l.id, status: l.status, source: l.source, alias: l.matched_alias,
+    const leaks = (await db.getAllLeaksForUser(user.id, { limit: 60, offset: 0, includeUnapproved: true })).map((l) => ({
+      id: l.id, status: l.status, approved: l.status === 'manual_review' ? Boolean(l.approved_at) : undefined, source: l.source, alias: l.matched_alias,
       fingerprintDistance: l.fingerprint_distance, title: l.title, snippet: l.snippet, url: l.url,
     }));
     res.json({ ok: true, dismissed: ids, leaks });

@@ -25,7 +25,7 @@ const db = require('./db');
 const fingerprint = require('./fingerprint');
 const { sendDailyReportEmail } = require('./emailReport');
 const { lookupHostingAndAbuseContacts, findSiteContactEmail, extractMediaLinksFromPage } = require('./hostLookup');
-const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform, getOwnDomainFamilies } = require('./constants');
+const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform, getOwnDomainFamilies, matchesAlias, isUnverifiedProfilePage } = require('./constants');
 
 // Google does not offer a public API for third parties to submit copyright
 // removal requests — their "Remove content from Google" tool is a web form
@@ -109,31 +109,6 @@ function buildTextQueries(alias, platforms, siteGroups = []) {
   return queries;
 }
 
-/**
- * Relevance check: does this search result actually mention the client's
- * alias? Google returns pages that match only PART of a query (e.g. just
- * "asmr" or just "leaked"), so without this every unrelated creator's page
- * became a "leak" — and then received a DMCA notice. Comparison ignores
- * case, spaces, punctuation and accents, so alias "jaxi asmr" matches a
- * title "Jaxi ASMR", a URL ".../jaxi-asmr/..." or a snippet "jaxiasmr".
- * The full alias must appear — a match on only one word is not enough.
- */
-function normalizeForMatch(str) {
-  return String(str || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^\p{L}\p{N}]/gu, '');
-}
-
-function matchesAlias(alias, ...fields) {
-  const needle = normalizeForMatch(alias);
-  if (!needle) return false;
-  // Each field on its own: joining them first would let the end of one field
-  // and the start of the next combine into a false match ("...jaxi" + "asmr...").
-  return fields.some((f) => normalizeForMatch(f).includes(needle));
-}
-
-
 // ---- Search-result pages and join links ----
 // A site's own search page ("/search/jaxi-asmr/", "?s=jaxi+asmr") is only a
 // list. We never report the list itself; instead we open it and take the
@@ -208,6 +183,11 @@ function isScanDue(user, now = Date.now()) {
 // searched photo or one of the client's fingerprints (dHash, see
 // fingerprint.js) — Lens also returns merely similar-looking pictures.
 const LENS_IMAGES_PER_DAY = Math.max(0, Number(process.env.LENS_IMAGES_PER_DAY ?? 4));
+// Lens returns pictures that merely LOOK alike, so its photo matches need
+// to be closer than other searches' (FINGERPRINT_MAX_DISTANCE, default 5)
+// and the compared picture must be big enough to hold real detail.
+const LENS_MAX_DISTANCE = Math.max(0, Number(process.env.LENS_MAX_DISTANCE ?? 3));
+const LENS_MIN_IMAGE_SIZE = 150;
 const LENS_INTERVAL_MS = 20 * 60 * 60 * 1000;
 const MAX_LENS_DOWNLOADS = 60;
 const MAX_ORIGINAL_LINKS_FOR_IMAGES = 3;
@@ -255,16 +235,20 @@ async function runReverseImageSearch(user, aliases, originalLinks, fingerprints)
 
       for (let i = 0; i < fresh.length; i += FINGERPRINT_BATCH) {
         const batch = fresh.slice(i, i + FINGERPRINT_BATCH);
-        const hashes = await Promise.all(batch.map((r) => {
-          if (!compareTo.length || !r.thumbnail || downloads <= 0) return null;
+        const hashes = await Promise.all(batch.map(async (r) => {
+          if (!compareTo.length || !(r.image || r.thumbnail) || downloads <= 0) return null;
           downloads--;
-          return fingerprint.hashImageUrl(r.thumbnail);
+          // The full-size picture when Lens gives one; small previews only
+          // count if they are at least LENS_MIN_IMAGE_SIZE pixels.
+          return (r.image && await fingerprint.hashImageUrl(r.image, { minSize: LENS_MIN_IMAGE_SIZE }))
+            || (r.thumbnail && await fingerprint.hashImageUrl(r.thumbnail, { minSize: LENS_MIN_IMAGE_SIZE }));
         }));
         for (let j = 0; j < batch.length; j++) {
           const r = batch[j];
           const alias = aliases.find((a) => matchesAlias(a, r.url, r.title));
-          const distance = fingerprint.bestMatch(hashes[j], compareTo);
+          const distance = fingerprint.bestMatch(hashes[j], compareTo, LENS_MAX_DISTANCE);
           if (!alias && distance === null) continue;
+          if (isUnverifiedProfilePage(r.url, aliases, distance)) continue;
           if (distance !== null) out.matches++;
           await db.insertLeak({
             userId: user.id,
@@ -681,6 +665,7 @@ async function runDailyScanForUser(user) {
                 if (isSearchPageUrl(item.url) || isJoinPageUrl(item.url)) continue;
                 if (isOwnContent(item.url, originalLinks)) continue;
                 if (!matchesAlias(alias, item.url, item.text)) continue;
+                if (isUnverifiedProfilePage(item.url, aliases)) continue;
                 if (await db.leakExists(user.id, item.url)) continue;
                 await db.insertLeak({
                   userId: user.id,
@@ -708,7 +693,7 @@ async function runDailyScanForUser(user) {
           // Title or address only. Google's snippet often shows a page's menu,
           // tag cloud or "related" text, which can name the client on pages
           // that have nothing to do with them.
-          if (matchesAlias(alias, result.url, result.title)) {
+          if (matchesAlias(alias, result.url, result.title) && !isUnverifiedProfilePage(result.url, aliases)) {
             await db.insertLeak({
               userId: user.id,
               url: result.url,
@@ -814,7 +799,7 @@ async function runDailyScanForUser(user) {
           // page title or URL (not just loose snippet text).
           const textMatch = fingerprints.length
             ? false
-            : matchesAlias(alias, result.url, result.title, '');
+            : matchesAlias(alias, result.url, result.title, '') && !isUnverifiedProfilePage(result.url, aliases);
           if (!textMatch && distance === null) {
             irrelevantSkipped++;
             continue;
@@ -869,8 +854,12 @@ async function runDailyScanForUser(user) {
   // scans (before the filter existed) so no notice is sent for them.
   // Same own-site rule for items already waiting in manual review, so the
   // admin digest never lists the client's own pages or their subdomains.
+  // Big-platform links also get today's matching rules, so ones saved under
+  // older, looser rules drop out.
   for (const leak of await db.getLeaksByStatus(user.id, 'manual_review')) {
-    if (isOwnContent(leak.url, originalLinks)) await db.markLeakStatus(leak.id, 'dismissed');
+    if (isOwnContent(leak.url, originalLinks) || failsMatchRules(leak, aliases)) {
+      await db.markLeakStatus(leak.id, 'dismissed');
+    }
   }
   const pendingLeaks = await db.getLeaksByStatus(user.id, 'found');
   const newlyFound = [];
@@ -878,7 +867,7 @@ async function runDailyScanForUser(user) {
     if (isOwnContent(leak.url, originalLinks)) {
       // The client's own site/subdomain — never report it.
       await db.markLeakStatus(leak.id, 'dismissed');
-    } else if (isJoinPageUrl(leak.url) || isSearchPageUrl(leak.url)) {
+    } else if (isJoinPageUrl(leak.url) || isSearchPageUrl(leak.url) || failsMatchRules(leak, aliases)) {
       await db.markLeakStatus(leak.id, 'dismissed');
       irrelevantSkipped++;
     } else if (leak.fingerprint_distance == null && leak.source !== 'serper_lens' && leak.matched_alias && !matchesAlias(leak.matched_alias, leak.url, leak.title)) {
@@ -971,6 +960,18 @@ async function runDailyScanForUser(user) {
   }
 
   return { user: user.email, reportSent: false, queriesRun, queriesFailed, fingerprintMatches };
+}
+
+// A saved link that today's rules would not keep: a big-platform profile
+// page of someone else's account, or a reverse-image result whose only
+// reason was a photo match looser than LENS_MAX_DISTANCE.
+function failsMatchRules(leak, aliases) {
+  const distance = leak.fingerprint_distance ?? null;
+  if (isUnverifiedProfilePage(leak.url, aliases, distance)) return true;
+  if (leak.source === 'serper_lens' && distance !== null && distance > LENS_MAX_DISTANCE) {
+    return !aliases.some((a) => matchesAlias(a, leak.url, (leak.title || '').replace(/^\[Verified match\] /, '')));
+  }
+  return false;
 }
 
 // Scans every active client whose interval has passed (or everyone, with

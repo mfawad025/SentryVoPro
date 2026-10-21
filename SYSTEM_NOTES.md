@@ -15,7 +15,7 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 ## Reverse image search (Google Lens)
 - Once a day per client (`users.last_lens_at`), up to `LENS_IMAGES_PER_DAY` (4) of their photos go to Serper `/lens`, rotating through the list daily.
 - Photos: `reference_images` table (admin: `GET /api/admin/reference-images?userId=`, `POST .../add?userId=` body `{urls:[...]}`, `GET .../clear?userId=`, all with the admin key) plus the preview images of the client's first 3 original links.
-- A result is kept only if it names an alias in URL/title, or its thumbnail matches the searched photo or a stored fingerprint (dHash, <= 5 bits). Saved with `source = 'serper_lens'`, shown as "Reverse image", included in the admin digest. Not facial recognition.
+- A result is kept only if it names an alias in URL/title, or its picture matches the searched photo or a stored fingerprint. Lens matches are stricter than other searches: distance <= 3 bits (`LENS_MAX_DISTANCE`), compared on the full-size picture when Lens gives one, and pictures under 150 px are ignored (Lens also returns merely similar-looking pictures). Saved with `source = 'serper_lens'`, shown as "Reverse image", included in the admin digest. Not facial recognition.
 
 ## Scanning (server/scanner.js)
 - Serper.dev Google search, `num: 100` (paid credits). Text queries per alias, plus Telegram (`t.me`) and a rotating slice of known leak sites. Google Images queries use the same leak terms as web (`"alias" leaked`, `"alias" nude`).
@@ -25,9 +25,11 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
   - Rescue pass: non-matching pages are opened and their preview images fingerprinted.
   - Search-result/tag pages (`/search/`, `?s=`, ...) are NOT reported: the page is opened and only items whose link/title names the client are saved (`source = search_expand`). `/join/`-style links are skipped.
   - Page-crawl expansion on known sites only claims media whose own URL names the client.
+  - **Big-platform profile pages** (x.com/name, instagram.com/name, tiktok.com/@name, reddit.com/user/name, youtube.com/@name, facebook.com/name, ...; `profileHandle` in constants.js) are kept only if the account's username contains one of the client's names (fake/impersonation account) or a photo matched. A profile titled with a post that merely mentions the client is not a leak. Individual posts (`/status/`, `/p/`, `/comments/`, ...) follow the normal rules. Saved `found`/`manual_review` links that fail today's rules are dismissed on the next scan.
 - **Own content is never reported:** a result is skipped if its host equals, or is any subdomain of, the host of one of the client's original links (e.g. original `onlyfans.com/x` also covers `cdn.onlyfans.com`). One-way only. Already-saved `found`/`manual_review` leaks that match are set to `dismissed` on the next scan. **Company families** (constants.js `OWN_DOMAIN_FAMILIES`): an original link on any domain of a family covers the whole family — pornhub.com/.org/.net, phncdn.com, modelhub.com; chaturbate.com + highwebmedia.com. Extra families via Render env `OWN_DOMAIN_FAMILIES_EXTRA` (JSON array of arrays). Other cross-domain CDNs (e.g. twimg.com for x.com) are NOT covered — add such links as original links.
 - Fingerprints: dHash only, no images stored (`content_fingerprints`, max 300/client). Upload page: `admin-fingerprints.html`.
 - Statuses: found -> reported / manual_review (major platforms) -> removed; `dismissed` = excluded everywhere.
+- **Big-platform links need the admin's approval** before the client sees them: `manual_review` with `leaks.approved_at` NULL is hidden from the client's report, dashboard and counts (`CLIENT_VISIBLE` in db.js). Approving from the digest sets `approved_at`; the link then appears in the client's next report. Links that existed when this was added were marked approved.
 
 ## Takedowns
 - Known sites: one consolidated email per domain. Unknown: per-link flow. Major platforms (Reddit, X, Instagram, ...) never emailed; flagged `manual_review` with the platform's own form link.
@@ -41,7 +43,8 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
   1. **Web links** (Google Search pages: `serper_web`, `search_expand`) → "Report to Google" (Google DMCA form).
   2. **Google Images links** (`serper_image`, `serper_lens`) → "Report to Google"; shows the page and the image file.
   3. **Big platforms** (`manual_review`) → "Report on <platform>" (that platform's copyright form).
-- Attached `.txt` has the Google links grouped into web and image sections. Each leak is sent once (`admin_digest_sent_at`). Google TCRP was REJECTED, so submissions to Google are manual.
+- Under each link: **Why** it was flagged (name in address / name in page title + the title / photo match / reverse image / site search page) and a **Not a leak** button; big-platform links also get **Approve**. The buttons open `/api/leak-action` (signed per leak and action with `ADMIN_SECRET_KEY`, no admin key in the email), which shows a confirm page; the change happens only on its POST button, so mail scanners opening links can't trigger it. Not a leak = `dismissed`.
+- Attached `.txt` has the Google links grouped into web and image sections. Each leak is sent once (`admin_digest_sent_at`), except big-platform links waiting for approval, which are repeated daily until approved or dismissed. Google TCRP was REJECTED, so submissions to Google are manual.
 - Join / sign-up / redirect pages (`/join`, `/signup`, `/go`, `/out`, ...) are never saved or reported: they hold no copyrighted content, so a DMCA notice for them would be invalid.
 
 ## Admin endpoints (all need `?key=ADMIN_SECRET_KEY`)

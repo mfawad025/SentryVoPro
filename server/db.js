@@ -201,7 +201,24 @@ async function initSchema() {
       scanned_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  // Big-platform links (status 'manual_review') are shown to the client only
+  // after the admin approves them from the daily digest; approved_at is that
+  // moment. The first time this column is added, links the client could
+  // already see are marked approved so nothing they saw disappears.
+  const hadApproval = await pool.query(
+    `SELECT 1 FROM information_schema.columns WHERE table_name = 'leaks' AND column_name = 'approved_at'`
+  );
+  await pool.query(`ALTER TABLE leaks ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`);
+  if (!hadApproval.rows.length) {
+    await pool.query(`UPDATE leaks SET approved_at = found_at WHERE status = 'manual_review'`);
+  }
 }
+
+// What the client sees (reports, dashboard, counts): everything except
+// dismissed links and big-platform links still waiting for approval.
+const CLIENT_VISIBLE = `status <> 'dismissed' AND NOT (status = 'manual_review' AND approved_at IS NULL)`;
+
 // Run once at startup; index.js awaits this before accepting requests.
 const ready = initSchema();
 
@@ -589,7 +606,8 @@ async function insertLeak({ userId, url, title, source, matchedAlias, snippet = 
 
 async function getLeaksFoundSince(userId, isoTimestamp) {
   const result = await pool.query(
-    `SELECT * FROM leaks WHERE user_id = $1 AND found_at >= $2 AND status <> 'dismissed' ORDER BY found_at DESC`,
+    // A big-platform link approved since the last report counts as new.
+    `SELECT * FROM leaks WHERE user_id = $1 AND (found_at >= $2 OR approved_at >= $2) AND ${CLIENT_VISIBLE} ORDER BY found_at DESC`,
     [userId, isoTimestamp]
   );
   return result.rows;
@@ -600,9 +618,11 @@ async function getLeaksByStatus(userId, status) {
   return result.rows;
 }
 
-async function getAllLeaksForUser(userId, { limit = 100, offset = 0 } = {}) {
+// includeUnapproved: admin views also list big-platform links still
+// waiting for approval; the client's dashboard and reports never do.
+async function getAllLeaksForUser(userId, { limit = 100, offset = 0, includeUnapproved = false } = {}) {
   const result = await pool.query(
-    `SELECT * FROM leaks WHERE user_id = $1 AND status <> 'dismissed' ORDER BY found_at DESC LIMIT $2 OFFSET $3`,
+    `SELECT * FROM leaks WHERE user_id = $1 AND ${includeUnapproved ? `status <> 'dismissed'` : CLIENT_VISIBLE} ORDER BY found_at DESC LIMIT $2 OFFSET $3`,
     [userId, limit, offset]
   );
   return result.rows;
@@ -651,7 +671,7 @@ async function getLeakSummary(userId) {
        SUM(CASE WHEN status = 'found' THEN 1 ELSE 0 END) AS found,
        SUM(CASE WHEN status = 'reported' THEN 1 ELSE 0 END) AS reported,
        SUM(CASE WHEN status = 'removed' THEN 1 ELSE 0 END) AS removed
-     FROM leaks WHERE user_id = $1 AND status <> 'dismissed'`,
+     FROM leaks WHERE user_id = $1 AND ${CLIENT_VISIBLE}`,
     [userId]
   );
   const row = result.rows[0];
@@ -686,13 +706,25 @@ async function getPendingAdminDigestLeaks({ includeSent = false } = {}) {
     SELECT leaks.*, users.name AS creator_name, users.email AS creator_email
     FROM leaks
     JOIN users ON users.id = leaks.user_id
-    WHERE ($1::boolean OR leaks.admin_digest_sent_at IS NULL)
+    WHERE ($1::boolean OR leaks.admin_digest_sent_at IS NULL
+           -- big-platform links waiting for approval are repeated daily until decided
+           OR (leaks.status = 'manual_review' AND leaks.approved_at IS NULL))
       AND ($1::boolean = false OR leaks.google_submitted_at IS NULL)
       AND leaks.status NOT IN ('dismissed', 'removed')
       AND (leaks.status = 'manual_review' OR leaks.source IN ('serper_web', 'serper_image', 'serper_lens', 'search_expand'))
     ORDER BY leaks.found_at ASC
   `, [includeSent]);
   return result.rows;
+}
+
+async function getLeakById(id) {
+  const result = await pool.query(`SELECT * FROM leaks WHERE id = $1`, [id]);
+  return result.rows[0] || null;
+}
+
+// Admin approved a big-platform link: the client sees it from now on.
+async function approveLeak(id) {
+  await pool.query(`UPDATE leaks SET approved_at = NOW() WHERE id = $1 AND approved_at IS NULL`, [id]);
 }
 
 async function markLeaksDigestSent(leakIds) {
@@ -771,6 +803,8 @@ module.exports = {
   getUserByEmail,
   markReportSentNow,
   isReportDue,
+  getLeakById,
+  approveLeak,
   claimFreeScan,
   releaseFreeScan,
   createSession,

@@ -111,7 +111,99 @@ function getOwnDomainFamilies() {
 
 const GOOGLE_DMCA_FORM_URL = 'https://reportcontent.google.com/forms/dmca_search';
 
+/**
+ * Relevance check: does this search result actually mention the client's
+ * alias? Google returns pages that match only PART of a query (e.g. just
+ * "asmr" or just "leaked"), so without this every unrelated creator's page
+ * became a "leak" — and then received a DMCA notice. Comparison ignores
+ * case, spaces, punctuation and accents, so alias "jaxi asmr" matches a
+ * title "Jaxi ASMR", a URL ".../jaxi-asmr/..." or a snippet "jaxiasmr".
+ * The full alias must appear — a match on only one word is not enough.
+ */
+function normalizeForMatch(str) {
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function matchesAlias(alias, ...fields) {
+  const needle = normalizeForMatch(alias);
+  if (!needle) return false;
+  // Each field on its own: joining them first would let the end of one field
+  // and the start of the next combine into a false match ("...jaxi" + "asmr...").
+  return fields.some((f) => normalizeForMatch(f).includes(needle));
+}
+
+// ---- Profile pages on big platforms ----
+// A profile page (x.com/name, instagram.com/name, reddit.com/user/name, ...)
+// shows whatever that account posted lately, so Google often titles it with
+// a post that merely mentions the client ("... @kitsykat ..."). That is not
+// a leak. Such a page is kept only when the account's own username contains
+// one of the client's names (a fake or impersonation account) or one of the
+// client's photos matched. Individual posts are not affected.
+const PROFILE_RULES = [
+  // [domain, function(pathSegments, url) -> handle or null]
+  [['x.com', 'twitter.com'], (p) => (p.length >= 1 && p.length <= 2 && !['i', 'search', 'hashtag', 'home', 'explore', 'intent', 'share', 'settings', 'messages', 'notifications'].includes(p[0].toLowerCase()) && (p.length === 1 || ['media', 'with_replies', 'likes', 'highlights', 'photo', 'header_photo'].includes(p[1].toLowerCase())) ? p[0] : null)],
+  [['instagram.com', 'threads.net'], (p) => (p.length >= 1 && p.length <= 2 && !['p', 'reel', 'reels', 'tv', 'explore', 'stories', 'accounts', 'post', 't'].includes(p[0].toLowerCase()) && (p.length === 1 || ['reels', 'tagged', 'replies', 'media'].includes(p[1].toLowerCase())) ? p[0].replace(/^@/, '') : null)],
+  [['tiktok.com'], (p) => (p.length === 1 && p[0].startsWith('@') ? p[0].slice(1) : null)],
+  [['reddit.com'], (p) => (p.length >= 2 && ['user', 'u'].includes(p[0].toLowerCase()) && !p.includes('comments') ? p[1] : null)],
+  [['youtube.com'], (p) => (p.length >= 1 && p[0].startsWith('@') ? p[0].slice(1) : p.length >= 2 && ['c', 'channel', 'user'].includes(p[0].toLowerCase()) && (p.length === 2 || ['videos', 'shorts', 'featured', 'streams'].includes(p[2].toLowerCase())) ? p[1] : null)],
+  [['facebook.com'], (p, u) => (p.length === 1 && p[0].toLowerCase() === 'profile.php' ? (u.searchParams.get('id') || '') : p.length === 1 && !/\.php$/i.test(p[0]) && !['watch', 'groups', 'events', 'marketplace', 'share', 'reel', 'photo', 'stories', 'gaming'].includes(p[0].toLowerCase()) ? p[0] : null)],
+  [['pinterest.com'], (p) => (p.length === 1 && !['pin', 'search', 'ideas'].includes(p[0].toLowerCase()) ? p[0] : null)],
+  [['tumblr.com'], (p, u) => (u.hostname.replace(/^www\./, '') !== 'tumblr.com' ? (p.length === 0 ? u.hostname.split('.')[0] : null) : p.length === 1 && !['tagged', 'search', 'explore', 'dashboard'].includes(p[0].toLowerCase()) ? p[0] : null)],
+  [['snapchat.com'], (p) => (p.length === 2 && p[0].toLowerCase() === 'add' ? p[1] : null)],
+  [['linkedin.com'], (p) => (p.length === 2 && p[0].toLowerCase() === 'in' ? p[1] : null)],
+];
+
+// The account name if the URL is a big platform's profile page, else null.
+function profileHandle(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const host = u.hostname.replace(/^(www|m|mobile|old)\./, '').toLowerCase();
+  const segments = u.pathname.split('/').filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
+  for (const [domains, rule] of PROFILE_RULES) {
+    if (domains.some((d) => host === d || host.endsWith(`.${d}`))) {
+      const handle = rule(segments, u);
+      return handle === null || handle === undefined ? null : String(handle);
+    }
+  }
+  return null;
+}
+
+// True for a big-platform profile page that should NOT be reported: the
+// username doesn't contain any of the client's names and no photo matched.
+function isUnverifiedProfilePage(url, aliases, fingerprintDistance = null) {
+  const handle = profileHandle(url);
+  if (handle === null) return false;
+  if (fingerprintDistance !== null && fingerprintDistance !== undefined) return false;
+  return !(aliases || []).filter(Boolean).some((a) => matchesAlias(a, handle));
+}
+
+// ---- One-click actions in the admin digest email ----
+// Each "Not a leak" / "Approve" link carries a signature made with
+// ADMIN_SECRET_KEY, so the link works for that one leak and action only and
+// the admin key itself never appears in an email.
+const LEAK_ACTIONS = ['dismiss', 'approve'];
+
+function leakActionToken(id, action) {
+  const secret = process.env.ADMIN_SECRET_KEY || '';
+  return require('crypto').createHmac('sha256', secret).update(`leak-action:${action}:${id}`).digest('hex').slice(0, 32);
+}
+
+function leakActionUrl(id, action) {
+  const base = (process.env.API_PUBLIC_URL || 'https://api.sentryvo.com').replace(/\/$/, '');
+  return `${base}/api/leak-action?id=${id}&a=${action}&t=${leakActionToken(id, action)}`;
+}
+
 module.exports = {
+  LEAK_ACTIONS,
+  leakActionToken,
+  leakActionUrl,
+  matchesAlias,
+  normalizeForMatch,
+  profileHandle,
+  isUnverifiedProfilePage,
   getOwnDomainFamilies,
   googleDelistUrl,
   GOOGLE_DMCA_FORM_URL,

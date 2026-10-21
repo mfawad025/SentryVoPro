@@ -37,6 +37,27 @@ async function sendDailyDigestIfDue() {
   await sendAdminDigestIfNeeded();
 }
 
+// One scheduled check: scan the clients that are due, then send the daily
+// admin digest if it is due. Used by the in-process hourly cron and by
+// /api/cron/tick, which an outside scheduler can call to wake a server that
+// sleeps when idle (e.g. Render's free plan, where node-cron never fires).
+let checkInProgress = false;
+async function runScheduledCheck(source = 'cron') {
+  if (checkInProgress) return { skipped: true };
+  checkInProgress = true;
+  try {
+    const results = await runDailyScanForAllUsers();
+    if (results.length) {
+      console.log(`[${new Date().toISOString()}] (${source}) Scanned ${results.length} client(s) that were due.`);
+    }
+    // After the scans, so the digest includes anything they just found.
+    await sendDailyDigestIfDue();
+    return { scanned: results.length };
+  } finally {
+    checkInProgress = false;
+  }
+}
+
 function startDailyScanCron() {
   // Checks every hour; each client is scanned when their plan's interval
   // has passed (scanner.js isScanDue). DAILY_SCAN_CRON is no longer used.
@@ -48,16 +69,9 @@ function startDailyScanCron() {
     console.error(`Invalid SCAN_CHECK_CRON value: "${schedule}" — falling back to hourly`);
   }
 
-  cron.schedule(cron.validate(schedule) ? schedule : '7 * * * *', async () => {
-    const results = await runDailyScanForAllUsers();
-    if (results.length) {
-      console.log(`[${new Date().toISOString()}] Scanned ${results.length} client(s) that were due.`);
-    }
-    // After the scans, so the digest includes anything they just found.
-    await sendDailyDigestIfDue();
-  });
+  cron.schedule(cron.validate(schedule) ? schedule : '7 * * * *', () => runScheduledCheck('cron'));
 
   console.log(`Scan check scheduled: "${schedule}"`);
 }
 
-module.exports = { startDailyScanCron, sendAdminDigestIfNeeded };
+module.exports = { startDailyScanCron, sendAdminDigestIfNeeded, runScheduledCheck };

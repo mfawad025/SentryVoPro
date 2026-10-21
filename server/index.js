@@ -760,6 +760,20 @@ app.post('/api/agency/add-creator', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- Scheduled check for an outside scheduler ----------------
+// For hosts that sleep when idle (Render free plan): have cron-job.org call
+// https://api.sentryvo.com/api/cron/tick?key=ADMIN_KEY every hour. It does
+// exactly what the built-in hourly check does — scans only the clients that
+// are due and sends the daily admin digest — so calling it often costs no
+// extra Serper credits. It answers straight away and works in the background,
+// so the scheduler's request timeout doesn't matter.
+app.all('/api/cron/tick', (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  const { runScheduledCheck } = require('./cron');
+  runScheduledCheck('tick').catch((err) => console.error('Scheduled check failed:', err.message));
+  res.status(202).json({ ok: true, started: true });
+});
+
 // ---------------- Manual trigger for testing the scan pipeline ----------------
 // GET version: just visit this URL directly in a browser, no extra tools needed.
 app.get('/api/scan/run-now', async (req, res) => {

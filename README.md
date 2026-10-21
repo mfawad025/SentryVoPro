@@ -217,10 +217,11 @@ can wire up for you.
   as `DATABASE_URL` stays correctly set in your host's environment variables.
 - Keep the server **always-on** (Render Starter tier or equivalent, not a
   free tier that sleeps) or the hourly scan check won't fire reliably.
-  Alternative: use an external cron service (e.g. cron-job.org, free) to hit
-  `/api/scan/run-now?key=YOUR_ADMIN_KEY` on a schedule instead of relying on
-  `node-cron` inside a sleeping process. (The admin key is required — this
-  endpoint runs every subscriber's scan and spends Serper credits.)
+  Alternative: have an external cron service (e.g. cron-job.org, free) call
+  `/api/cron/tick?key=YOUR_ADMIN_KEY` every hour. It wakes the server and runs
+  the same check as the built-in hourly cron (only clients that are due, plus
+  the daily admin digest), so it costs no extra Serper credits. Don't schedule
+  `/api/scan/run-now`: that scans every subscriber on every call.
 - Watch your Serper.dev usage (2,500 free queries on signup, ~$1/1,000
   after) — the query count per subscriber scales with how many aliases and
   platforms they have, so budget accordingly as you grow.

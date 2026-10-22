@@ -1,7 +1,7 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { buildLeakExcelBuffer } = require('./excelReport');
-const { GOOGLE_REMOVAL_TOOL_URL, GOOGLE_DMCA_FORM_URL, googleDelistUrl, getMajorPlatformReportLink, matchesAlias, leakActionUrl } = require('./constants');
+const { GOOGLE_REMOVAL_TOOL_URL, GOOGLE_DMCA_FORM_URL, googleDelistUrl, getMajorPlatformReportLink, matchesAlias, leakActionUrl, formatLocalTime, REPORT_TIMEZONE } = require('./constants');
 
 function getMailer() {
   if (!process.env.SMTP_HOST || process.env.SMTP_HOST === 'smtp.yourprovider.com') return null;
@@ -239,7 +239,30 @@ function leakReason(leak) {
   return `${prefix}matched "${alias}"`;
 }
 
-function buildAdminDigestHtml(leaks) {
+// "Your clients" table at the top of the admin's daily email.
+function buildClientStatusHtml(status) {
+  if (!status || !status.length) return '<p style="color:#666;">No active clients.</p>';
+  const cell = 'padding:6px 8px; border-bottom:1px solid #eee; vertical-align:top;';
+  const planName = (p) => (p === 'multi' ? 'Multiple' : p === 'single' ? 'Single' : String(p || '').replace('agency_', 'Agency '));
+  const rows = status.map((c) => `
+      <tr>
+        <td style="${cell}"><strong>${esc(c.name)}</strong><br><span style="color:#888; font-size:.78rem;">${esc(c.email)} · ${esc(planName(c.plan))}</span>
+          ${c.warnings.map((w) => `<br><span style="color:#C0392B; font-size:.8rem; font-weight:bold;">⚠ ${esc(w)}</span>`).join('')}</td>
+        <td style="${cell} white-space:nowrap;">${esc(formatLocalTime(c.lastScanAt))}</td>
+        <td style="${cell} white-space:nowrap;">${esc(formatLocalTime(c.lastReportAt))}</td>
+        <td style="${cell} text-align:center;">${c.newLast24h}</td>
+      </tr>`).join('');
+  const problems = status.filter((c) => c.warnings.length).length;
+  return `
+      <p style="margin:18px 0 6px; font-weight:bold;">Your clients ${problems ? `<span style="color:#C0392B;">(${problems} need attention)</span>` : '<span style="color:#0B8F7C;">(all running normally)</span>'}</p>
+      <table style="width:100%; border-collapse:collapse; font-size:.82rem;">
+        <tr style="text-align:left; color:#666; font-size:.75rem;"><th style="${cell}">Client</th><th style="${cell}">Last scan</th><th style="${cell}">Last report</th><th style="${cell}">New (24h)</th></tr>
+        ${rows}
+      </table>
+      <p style="margin:6px 0 0; font-size:.75rem; color:#888;">Times are ${esc(REPORT_TIMEZONE)} time.</p>`;
+}
+
+function buildAdminDigestHtml(leaks, status = null) {
   const byCreator = {};
   for (const leak of leaks) {
     const key = leak.creator_email;
@@ -292,15 +315,18 @@ function buildAdminDigestHtml(leaks) {
 
   return `
     <div style="font-family:Arial,sans-serif; max-width:680px; margin:0 auto; color:#1A1530;">
-      <h2 style="color:#D82F74; margin-bottom:4px;">SentryVo · Links to report today</h2>
+      <h2 style="color:#D82F74; margin-bottom:4px;">SentryVo · Daily summary</h2>
+      ${status ? buildClientStatusHtml(status) : ''}
+      <h3 style="margin:28px 0 4px;">Links to report today</h3>
+      ${leaks.length ? `
       <p style="margin-top:0;">${leaks.length} link(s) across ${Object.keys(byCreator).length} creator(s).</p>
       <p style="font-size:.85rem; color:#555;">Each link has its report button beside it and the reason it was flagged under it. "Not a leak" removes a wrong link from the client's dashboard and future reports. The attached text file has the same Google links, grouped into web and image links, for copy and paste.</p>
-      ${sections}
+      ${sections}` : '<p style="margin-top:0; color:#555;">No new links need reporting today.</p>'}
     </div>
   `;
 }
 
-async function sendAdminDigestEmail(leaks) {
+async function sendAdminDigestEmail(leaks, status = null) {
   const mailer = getMailer();
   if (!mailer) {
     throw new Error('SMTP is not configured (SMTP_HOST is missing or still the placeholder value)');
@@ -330,8 +356,8 @@ async function sendAdminDigestEmail(leaks) {
   await mailer.sendMail({
     from: process.env.REPORT_FROM_EMAIL,
     to: adminEmail,
-    subject: `SentryVo — ${leaks.length} link(s) to report today`,
-    html: buildAdminDigestHtml(leaks),
+    subject: leaks.length ? `SentryVo daily summary — ${leaks.length} link(s) to report` : 'SentryVo daily summary — no new links today',
+    html: buildAdminDigestHtml(leaks, status),
     attachments: lines.length
       ? [{ filename: `google-delist-links-${new Date().toISOString().slice(0, 10)}.txt`, content: lines.join('\n'), contentType: 'text/plain' }]
       : [],

@@ -180,6 +180,31 @@ function isUnverifiedProfilePage(url, aliases, fingerprintDistance = null) {
   return !(aliases || []).filter(Boolean).some((a) => matchesAlias(a, handle));
 }
 
+// ---- Local time for the daily emails ----
+// Client reports and the admin's daily email go out at a fixed local time
+// (REPORT_HOUR in REPORT_TIMEZONE, default 9:00 Pakistan time), not at
+// whatever time a scan happened to finish.
+const REPORT_TIMEZONE = process.env.REPORT_TIMEZONE || 'Asia/Karachi';
+const REPORT_HOUR = Number(process.env.REPORT_HOUR ?? 9);
+
+// { day: whole days since 1970 in that zone, hour: 0-23 }
+function localTime(date = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: REPORT_TIMEZONE, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hourCycle: 'h23',
+  }).formatToParts(new Date(date)).map((p) => [p.type, p.value]));
+  return {
+    day: Math.floor(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)) / 86400000),
+    hour: Number(parts.hour),
+  };
+}
+
+function formatLocalTime(date) {
+  if (!date) return 'never';
+  return new Date(date).toLocaleString('en-GB', {
+    timeZone: REPORT_TIMEZONE, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 // ---- One-click actions in the admin digest email ----
 // Each "Not a leak" / "Approve" link carries a signature made with
 // ADMIN_SECRET_KEY, so the link works for that one leak and action only and
@@ -197,6 +222,10 @@ function leakActionUrl(id, action) {
 }
 
 module.exports = {
+  REPORT_TIMEZONE,
+  REPORT_HOUR,
+  localTime,
+  formatLocalTime,
   LEAK_ACTIONS,
   leakActionToken,
   leakActionUrl,

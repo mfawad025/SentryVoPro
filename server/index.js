@@ -864,7 +864,7 @@ app.get('/api/admin/schedule-status', async (req, res) => {
   try {
     const { scheduleStatus } = require('./cron');
     const { scanIntervalHours, isScanDue } = require('./scanner');
-    const hour = 60 * 60 * 1000;
+    const { formatLocalTime, REPORT_HOUR, REPORT_TIMEZONE } = require('./constants');
     const at = (ms) => (ms ? new Date(ms).toISOString() : null);
     const clients = (await db.getActiveUsers()).map((u) => {
       const lastScan = u.last_scan_at ? new Date(u.last_scan_at).getTime() : null;
@@ -878,7 +878,7 @@ app.get('/api/admin/schedule-status', async (req, res) => {
         lastScanAt: at(lastScan),
         scanDueNow: isScanDue(u),
         lastReportAt: at(lastReport),
-        nextReportAround: lastReport ? at(lastReport + u.report_frequency_days * 24 * hour - 2 * hour) : 'next scan',
+        nextReport: lastReport ? `${u.report_frequency_days} day(s) after ${formatLocalTime(lastReport)}, from ${REPORT_HOUR}:00 ${REPORT_TIMEZONE} time` : 'next check',
         reportDueNow: db.isReportDue(u),
       };
     });

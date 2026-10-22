@@ -935,31 +935,29 @@ async function runDailyScanForUser(user) {
     if (removed) await db.markLeakStatus(leak.id, 'removed');
   }
 
-  // Scans run on the plan's interval (see isScanDue), but the EMAIL only
-  // goes out on the subscriber's report cadence — daily for the
-  // multi-platform ($100) plan, every 3 days for the single-platform ($50)
-  // plan (see report_frequency_days in db.js).
-  if (db.isReportDue(user)) {
-    const sinceTimestamp = user.last_report_at || scanStart;
-    const leaksSinceLastReport = await db.getLeaksFoundSince(user.id, sinceTimestamp);
-    const summary = await db.getLeakSummary(user.id);
+  lastScanStats.set(user.id, { at: new Date().toISOString(), queriesRun, queriesFailed });
 
-    await sendDailyReportEmail(user, leaksSinceLastReport, summary);
-    await db.logReportSent(user.id, leaksSinceLastReport.length);
-    await db.markReportSentNow(user.id);
+  const report = await sendReportIfDue(user, scanStart);
+  return { user: user.email, ...report, queriesRun, queriesFailed, fingerprintMatches };
+}
 
-    return {
-      user: user.email,
-      reportSent: true,
-      newLeaks: leaksSinceLastReport.length,
-      summary,
-      queriesRun,
-      queriesFailed,
-      fingerprintMatches,
-    };
-  }
+// Search totals of each client's latest scan, for the admin's daily email.
+const lastScanStats = new Map();
 
-  return { user: user.email, reportSent: false, queriesRun, queriesFailed, fingerprintMatches };
+// Scans run on the plan's interval (see isScanDue), but the EMAIL only goes
+// out on the client's report cadence and at the fixed report hour (see
+// db.isReportDue): daily for Multiple and admin-added clients, every 3 days
+// for Single (report_frequency_days in db.js).
+async function sendReportIfDue(user, fallbackSince = new Date().toISOString()) {
+  if (!db.isReportDue(user)) return { reportSent: false };
+  const sinceTimestamp = user.last_report_at || fallbackSince;
+  const leaksSinceLastReport = await db.getLeaksFoundSince(user.id, sinceTimestamp);
+  const summary = await db.getLeakSummary(user.id);
+
+  await sendDailyReportEmail(user, leaksSinceLastReport, summary);
+  await db.logReportSent(user.id, leaksSinceLastReport.length);
+  await db.markReportSentNow(user.id);
+  return { reportSent: true, newLeaks: leaksSinceLastReport.length, summary };
 }
 
 // A saved link that today's rules would not keep: a big-platform profile
@@ -980,6 +978,7 @@ function failsMatchRules(leak, aliases) {
 // A run that has been going this long is treated as stuck (a request that
 // never returned), so it can't block every later check forever.
 const SCAN_RUN_STUCK_MS = 3 * 60 * 60 * 1000;
+const REPORT_FRESH_SCAN_MS = 2 * 60 * 60 * 1000;
 let scanRunStartedAt = null;
 
 async function runDailyScanForAllUsers({ force = false } = {}) {
@@ -995,7 +994,12 @@ async function runDailyScanForAllUsers({ force = false } = {}) {
   scanRunStartedAt = startedAt;
   try {
     const active = await db.getActiveUsers();
-    const users = active.filter((u) => force || isScanDue(u));
+    // A client whose report is due gets a fresh scan first if their last
+    // one is older than REPORT_FRESH_SCAN_MS, so the report is up to date.
+    // This also lines each client's scan cycle up with the report hour.
+    const now = Date.now();
+    const users = active.filter((u) => force || isScanDue(u)
+      || (db.isReportDue(u) && (!u.last_scan_at || now - new Date(u.last_scan_at).getTime() > REPORT_FRESH_SCAN_MS)));
     console.log(`Scan check: ${users.length} of ${active.length} active client(s) due${force ? ' (forced)' : ''}.`);
     const results = [];
     for (const user of users) {
@@ -1003,6 +1007,15 @@ async function runDailyScanForAllUsers({ force = false } = {}) {
         results.push(await runDailyScanForUser(user));
       } catch (err) {
         console.error(`Scan failed for ${user.email}:`, err.message);
+      }
+    }
+    // Reports that are due for clients who didn't need a scan this time.
+    for (const user of await db.getActiveUsers()) {
+      try {
+        const report = await sendReportIfDue(user);
+        if (report.reportSent) console.log(`Report sent to ${user.email} (${report.newLeaks} new item(s)).`);
+      } catch (err) {
+        console.error(`Report failed for ${user.email}:`, err.message);
       }
     }
     return results;
@@ -1030,4 +1043,4 @@ if (require.main === module && process.argv.includes('--run-once')) {
     });
 }
 
-module.exports = { runDailyScanForUser, runDailyScanForAllUsers, scanIntervalHours, isScanDue, scanRunInfo, GOOGLE_REMOVAL_TOOL_URL };
+module.exports = { runDailyScanForUser, runDailyScanForAllUsers, sendReportIfDue, scanIntervalHours, isScanDue, scanRunInfo, lastScanStats, GOOGLE_REMOVAL_TOOL_URL };

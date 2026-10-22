@@ -35,11 +35,14 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 - Known sites: one consolidated email per domain. Unknown: per-link flow. Major platforms (Reddit, X, Instagram, ...) never emailed; flagged `manual_review` with the platform's own form link.
 
 ## Reports
-- Client report email on plan cadence: multi = daily, single = every 3 days, **admin-added (source `fiverr`) clients = daily** with a BCC copy to `ADMIN_DIGEST_EMAIL` (or `SMTP_USER`). 2-hour grace so daily reports are not skipped.
+- Client report email on plan cadence: multi = daily, single = every 3 days, **admin-added (source `fiverr`) clients = daily** with a BCC copy to `ADMIN_DIGEST_EMAIL` (or `SMTP_USER`).
+- **Fixed send time:** a report is due on its calendar day (`report_frequency_days` after the last one) from `REPORT_HOUR` (default 9) in `REPORT_TIMEZONE` (default Asia/Karachi), so it arrives at the same time every day; a report a day or more late goes out at the next hourly check. A client whose report is due is scanned first if their last scan is over 2 hours old. Reports are also sent for clients that didn't need a scan in that check. (The old rule, "24 h minus 2 h after the last report, at the next scan", made the time drift.)
 - `sendDailyReportEmail` throws if SMTP is not configured (no silent "success").
 
 ## Admin digest (daily) — manual reporting
-- One email to `ADMIN_DIGEST_EMAIL`, per client, in three lists, each link with its button beside it:
+- Sent **every day**, also when there are no new links, at the first hourly check from `ADMIN_DIGEST_HOUR` (default = `REPORT_HOUR`) in `REPORT_TIMEZONE`, after that check's scans and reports. The day it was sent is stored in `app_state` (`admin_digest_day`), so restarts neither repeat nor skip it. A missing daily email therefore always means something is wrong.
+- Top: **Your clients** table (last scan, last report, links found in 24 h) with warnings: scan overdue, report due but not sent, searches failed in the last scan (Serper credits).
+- Then the links, per client, in three lists, each link with its button beside it:
   1. **Web links** (Google Search pages: `serper_web`, `search_expand`) → "Report to Google" (Google DMCA form).
   2. **Google Images links** (`serper_image`, `serper_lens`) → "Report to Google"; shows the page and the image file.
   3. **Big platforms** (`manual_review`) → "Report on <platform>" (that platform's copyright form).

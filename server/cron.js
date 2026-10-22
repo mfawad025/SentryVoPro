@@ -4,19 +4,46 @@ const { runDailyScanForAllUsers, scanRunInfo } = require('./scanner');
 const db = require('./db');
 const { sendAdminDigestEmail } = require('./emailReport');
 
+// Health of each active client for the admin's daily email: when they were
+// last scanned and emailed, how many links were found in the last 24 hours,
+// and warnings when something is late or searches failed.
+async function buildClientStatus() {
+  const { scanIntervalHours, lastScanStats } = require('./scanner');
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const rows = [];
+  for (const u of await db.getActiveUsers()) {
+    const warnings = [];
+    const lastScan = u.last_scan_at ? new Date(u.last_scan_at).getTime() : null;
+    if (!lastScan || Date.now() - lastScan > (scanIntervalHours(u) + 3) * 60 * 60 * 1000) warnings.push('Scan is overdue');
+    if (db.isReportDue(u)) warnings.push('Report is due but was not sent (check the logs for "Report failed")');
+    const stats = lastScanStats.get(u.id);
+    if (stats && stats.queriesFailed) warnings.push(`${stats.queriesFailed} of ${stats.queriesRun} searches failed in the last scan (Serper credits?)`);
+    rows.push({
+      name: u.name,
+      email: u.email,
+      plan: u.plan,
+      lastScanAt: u.last_scan_at,
+      lastReportAt: u.last_report_at,
+      newLast24h: await db.countLeaksSince(u.id, since),
+      warnings,
+    });
+  }
+  return rows;
+}
+
+// The admin's daily email: every link that needs reporting by hand, plus the
+// status of every client. Sent every day, also when there is nothing new, so
+// a missing email always means something is wrong.
 async function sendAdminDigestIfNeeded({ includeSent = false } = {}) {
   try {
     const pendingLeaks = await db.getPendingAdminDigestLeaks({ includeSent });
-    if (!pendingLeaks.length) {
-      console.log('Admin digest: nothing new to report today.');
-      return { sent: 0 };
-    }
-    await sendAdminDigestEmail(pendingLeaks);
+    const status = await buildClientStatus();
+    await sendAdminDigestEmail(pendingLeaks, status);
     await db.markLeaksDigestSent(pendingLeaks.map((l) => l.id));
-    console.log(`Admin digest sent: ${pendingLeaks.length} item(s).`);
-    return { sent: pendingLeaks.length };
+    console.log(`Admin daily email sent: ${pendingLeaks.length} link(s), ${status.length} client(s).`);
+    return { sent: pendingLeaks.length, clients: status.length };
   } catch (err) {
-    console.error('Admin digest failed:', err.message);
+    console.error('Admin daily email failed:', err.message);
     return { sent: 0, error: err.message };
     // Deliberately don't mark anything as sent if the email itself failed —
     // these items stay pending and get included in tomorrow's digest
@@ -24,17 +51,24 @@ async function sendAdminDigestIfNeeded({ includeSent = false } = {}) {
   }
 }
 
-// The admin digest still goes out once a day: on the first run at or after
-// ADMIN_DIGEST_HOUR (server time, default 8 = the old daily scan time).
-const ADMIN_DIGEST_HOUR = Number(process.env.ADMIN_DIGEST_HOUR ?? 8);
+// Once a day, at the first check at or after ADMIN_DIGEST_HOUR local time
+// (REPORT_TIMEZONE, default the same hour as the client reports). The day
+// it was sent is stored in the database so a restart can't send it twice
+// or skip it.
+const { localTime, REPORT_HOUR } = require('./constants');
+const ADMIN_DIGEST_HOUR = Number(process.env.ADMIN_DIGEST_HOUR ?? REPORT_HOUR);
 let lastDigestDay = null;
 
 async function sendDailyDigestIfDue() {
-  const now = new Date();
-  const today = now.toDateString();
-  if (lastDigestDay === today || now.getHours() < ADMIN_DIGEST_HOUR) return;
-  lastDigestDay = today;
-  await sendAdminDigestIfNeeded();
+  const now = localTime();
+  if (now.hour < ADMIN_DIGEST_HOUR) return;
+  if (lastDigestDay === null) lastDigestDay = Number(await db.getAppState('admin_digest_day')) || 0;
+  if (lastDigestDay >= now.day) return;
+  const result = await sendAdminDigestIfNeeded();
+  if (!result.error) {
+    lastDigestDay = now.day;
+    await db.setAppState('admin_digest_day', now.day);
+  }
 }
 
 // One scheduled check: scan the clients that are due, then send the daily

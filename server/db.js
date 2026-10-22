@@ -200,6 +200,14 @@ async function initSchema() {
       alias TEXT,
       scanned_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Small key/value store for scheduler state that must survive restarts
+    -- (e.g. the day the admin's daily email was last sent).
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Big-platform links (status 'manual_review') are shown to the client only
@@ -383,14 +391,19 @@ async function markReportSentNow(userId) {
   await pool.query(`UPDATE users SET last_report_at = NOW() WHERE id = $1`, [userId]);
 }
 
-function isReportDue(user) {
+// A report is due on its calendar day: report_frequency_days after the last
+// one, from REPORT_HOUR local time (see constants.js). Counting calendar days
+// keeps reports at the same time every day; the old "24 hours after the last
+// one" rule made the time drift with every scan or manual send. A report that
+// is a day or more late goes out at the next check, whatever the hour.
+function isReportDue(user, now = new Date()) {
   if (!user.last_report_at) return true;
-  const last = new Date(user.last_report_at).getTime();
-  // 2-hour grace: the previous report is stamped when that day's scan
-  // FINISHES, so without it a daily report would be skipped whenever
-  // today's scan starts slightly earlier than yesterday's ended.
-  const dueAt = last + user.report_frequency_days * 24 * 60 * 60 * 1000 - 2 * 60 * 60 * 1000;
-  return Date.now() >= dueAt;
+  const { localTime, REPORT_HOUR } = require('./constants');
+  const today = localTime(now);
+  const daysSince = today.day - localTime(user.last_report_at).day;
+  const every = Math.max(1, Number(user.report_frequency_days) || 1);
+  if (daysSince < every) return false;
+  return daysSince > every || today.hour >= REPORT_HOUR;
 }
 
 // ---------- Sessions (simple token-based auth) ----------
@@ -717,6 +730,27 @@ async function getPendingAdminDigestLeaks({ includeSent = false } = {}) {
   return result.rows;
 }
 
+async function getAppState(key) {
+  const result = await pool.query(`SELECT value FROM app_state WHERE key = $1`, [key]);
+  return result.rows[0]?.value ?? null;
+}
+
+async function setAppState(key, value) {
+  await pool.query(
+    `INSERT INTO app_state (key, value, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [key, String(value)]
+  );
+}
+
+async function countLeaksSince(userId, isoTimestamp) {
+  const result = await pool.query(
+    `SELECT COUNT(*) AS n FROM leaks WHERE user_id = $1 AND found_at >= $2 AND status <> 'dismissed'`,
+    [userId, isoTimestamp]
+  );
+  return Number(result.rows[0].n) || 0;
+}
+
 async function getLeakById(id) {
   const result = await pool.query(`SELECT * FROM leaks WHERE id = $1`, [id]);
   return result.rows[0] || null;
@@ -805,6 +839,9 @@ module.exports = {
   isReportDue,
   getLeakById,
   approveLeak,
+  getAppState,
+  setAppState,
+  countLeaksSince,
   claimFreeScan,
   releaseFreeScan,
   createSession,

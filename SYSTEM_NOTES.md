@@ -71,8 +71,21 @@ Keep this file current whenever scanner, reporting or email behaviour changes.
 - Invoice events (`subscription_payment_*`) are logged only; Lemon Squeezy follows up with `subscription_updated`.
 - Subscribe the webhook to: order_created, subscription_created, subscription_updated, subscription_cancelled, subscription_resumed, subscription_expired, subscription_paused, subscription_unpaused.
 
+## Fake account monitor (server/impersonation.js)
+- Once a day per client (`users.last_impersonation_at`, `IMPERSONATION_INTERVAL_HOURS`), one Serper query per alias and platform: `"alias" site:instagram.com` etc. (`IMPERSONATION_PLATFORMS`, default instagram,tiktok,x,facebook,youtube; first `IMPERSONATION_MAX_ALIASES` (3) aliases). Plans: `IMPERSONATION_PLANS` (default all).
+- Only profile pages count (`profileHandle`). A profile is a candidate when the username looks like an alias (contains it, or 1 typo for 5-8 letters / 2 for 9+, after undoing look-alike digits like k1tsykat; aliases under 4 letters must match exactly), the display name in Google's title contains an alias, or (up to 10 per run) its page picture matches a fingerprint.
+- **The client's own accounts are never flagged**: profiles among their original links plus the `official_accounts` table (client: Fake Accounts tab; admin: "It's theirs"). Kept apart from original links because an original link covers its whole site for the leak scan.
+- The leak scan sends big-platform profile pages that matched only by name here instead of saving them as copyright leaks (when the monitor is on for that plan). A profile whose picture matched a photo stays a leak. Profile leaks saved before this change were left as they are.
+- Table `impersonations`, one row per client + platform + username. Status: `pending` (admin only) → `confirmed` → `reported` → `removed`; or `dismissed` (not fake) / `official`. The client sees confirmed/reported/removed (dashboard Fake Accounts tab, and new confirmations/removals in the report email).
+- **Admin digest**: "Fake accounts" section, repeated daily until handled: pending (Confirm fake / It's theirs / Not fake), confirmed (Open report kit), reported and still up after `IMPERSONATION_REREPORT_DAYS` (7) (Report again / It's gone). Buttons are signed links to `/api/impersonation-action` (same confirm-then-POST pattern as `/api/leak-action`).
+- **Report kit**: the platform's impersonation form (`IMPERSONATION_PLATFORMS` in constants.js) plus ready-to-paste text using `DMCA_AGENT_NAME` / `DMCA_AGENT_EMAIL`, then "I've reported it" (sets `reported`, counts `report_count`). Reporting is manual on purpose: the platforms only take these reports through their own forms, often with the person's ID.
+- Form links: Instagram/Threads, X confirmed from their help centers; TikTok, Facebook, YouTube, Reddit are best known links — check them once and update constants.js if one has moved. Pinterest, Tumblr, Snapchat, LinkedIn: report from the profile's menu.
+- Removal: each run rechecks up to 20 confirmed/reported accounts; only 404/410 or the platform's own "account doesn't exist" text counts as removed (platforms often show bots a login page, so anything else leaves the status alone). The admin can also press "It's gone".
+- Telegram is not covered: t.me channels with the client's name are already found and DMCA'd by the leak scan.
+- Admin: `GET /api/admin/impersonations?key=&email=[&scan=1]` lists every candidate with its action links; `scan=1` runs the search now.
+
 ## Not built yet
-Follow-up/escalation notices, impersonator (fake account) search, managed top plan.
+Follow-up/escalation notices, managed top plan. Billing for fake-account monitoring as a paid add-on (it is currently on for every plan).
 
 ## Design (2026-10 redesign)
 - Shared tokens, fonts (Unbounded / Instrument Sans / Martian Mono), buttons and the Radar Sweep logo live in `style.css`; light by default, dark via `prefers-color-scheme`.

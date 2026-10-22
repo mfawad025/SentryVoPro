@@ -33,6 +33,10 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z" stroke="currentColor" stroke-width="2"/></svg>
       Takedowns
     </a>
+    <a href="#" class="dash-link" data-tab="fakes">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M2 21 C2 16 5 14 9 14 C11 14 12.5 14.5 13.5 15.3" stroke="currentColor" stroke-width="2"/><path d="M16 15 L22 21 M22 15 L16 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Fake Accounts
+    </a>
     <a href="#" class="dash-link" data-tab="profile">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21 C4 16 8 14 12 14 C16 14 20 16 20 21" stroke="currentColor" stroke-width="2"/></svg>
       Brand Profile
@@ -154,6 +158,34 @@
       </div>
     </div>
 
+    <!-- ===================== FAKE ACCOUNTS ===================== -->
+    <div class="tab-panel hidden" data-panel="fakes">
+      <div class="dash-panel">
+        <div class="dash-panel-head">
+          <h3 style="margin:0;">Accounts Pretending To Be You</h3>
+          <span style="font-size:.8rem; color:var(--text-low);" id="fakes-count">—</span>
+        </div>
+        <p style="font-size:.85rem; color:var(--text-low); margin-top:0;">We search Instagram, TikTok, X, Facebook and YouTube every day for fake accounts using your name or photos. Each one is checked by our team, then reported to the platform with its impersonation form, and reported again if it stays up. The platform makes the final decision on removal.</p>
+        <div style="overflow-x:auto;">
+          <table class="dash-table">
+            <thead><tr><th>Platform</th><th>Account</th><th>Status</th><th>Found</th></tr></thead>
+            <tbody id="fakes-rows"><tr><td colspan="4" style="color:var(--text-low);">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="dash-panel">
+        <div class="dash-panel-head"><h3 style="margin:0;">Your Own Social Accounts</h3></div>
+        <p style="font-size:.85rem; color:var(--text-low); margin-top:0;">Add every real account you run (including backup accounts) so it's never flagged as fake. We also use these links when reporting fakes, to show the platform which account is the real you.</p>
+        <ul id="official-list" style="margin:0 0 16px; padding-left:20px; font-size:.9rem; word-break:break-all;"><li style="color:var(--text-low); list-style:none; margin-left:-20px;">Loading…</li></ul>
+        <form id="add-official-form" style="display:flex; gap:10px;">
+          <input type="url" id="new-official" placeholder="https://instagram.com/yourname" style="flex:1;" required>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+        <p class="confirm-note" id="add-official-status" style="min-height:1.2em; font-size:.82rem; margin-top:8px;"></p>
+      </div>
+    </div>
+
     <!-- ===================== BRAND PROFILE ===================== -->
     <div class="tab-panel hidden" data-panel="profile">
       <div class="dash-panel">
@@ -236,7 +268,7 @@
       link.classList.add('active');
       document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
       document.querySelector(`.tab-panel[data-panel="${tab}"]`).classList.remove('hidden');
-      const titles = { overview: 'Overview', scans: 'Scans', takedowns: 'Takedowns', profile: 'Brand Profile', billing: 'Billing', settings: 'Settings' };
+      const titles = { overview: 'Overview', scans: 'Scans', takedowns: 'Takedowns', fakes: 'Fake Accounts', profile: 'Brand Profile', billing: 'Billing', settings: 'Settings' };
       document.getElementById('dash-panel-title').textContent = titles[tab] || tab;
     });
   });
@@ -277,6 +309,7 @@
       renderTakedowns(leaks);
       renderProfile(data);
       renderBilling(data);
+      loadFakeAccounts();
     } catch (err) {
       console.error('Dashboard load error:', err);
       errorPanel.classList.remove('hidden');
@@ -339,6 +372,63 @@
       </tr>
     `).join('') : `<tr><td colspan="3" style="color:var(--text-low);">No takedown activity yet.</td></tr>`;
   }
+
+  // ---------------- Fake accounts ----------------
+  const PLATFORM_NAMES = { instagram: 'Instagram', threads: 'Threads', tiktok: 'TikTok', x: 'X (Twitter)', facebook: 'Facebook', youtube: 'YouTube', reddit: 'Reddit', pinterest: 'Pinterest', tumblr: 'Tumblr', snapchat: 'Snapchat', linkedin: 'LinkedIn' };
+
+  function fakeStatusHtml(f) {
+    const labels = { confirmed: ['sent', 'Being reported'], reported: ['sent', 'Reported'], removed: ['removed', 'Removed'] };
+    const [cls, label] = labels[f.status] || ['found', f.status];
+    const when = f.status === 'reported' && f.reportedAt ? ` <span style="font-size:.75rem; color:var(--text-low);">${new Date(f.reportedAt).toLocaleDateString()}</span>` : '';
+    return `<span class="badge ${cls}">${escapeHtml(label)}</span>${when}`;
+  }
+
+  async function loadFakeAccounts() {
+    const rowsEl = document.getElementById('fakes-rows');
+    const listEl = document.getElementById('official-list');
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/fake-accounts`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load fake accounts');
+      const { fakeAccounts, officialAccounts } = await res.json();
+      document.getElementById('fakes-count').textContent = `${fakeAccounts.length} found`;
+      rowsEl.innerHTML = fakeAccounts.length ? fakeAccounts.map((f) => `
+        <tr>
+          <td>${escapeHtml(PLATFORM_NAMES[f.platform] || f.platform)}</td>
+          <td><a href="${escapeAttr(safeUrl(f.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid); word-break:break-all;">@${escapeHtml(f.handle)}</a></td>
+          <td>${fakeStatusHtml(f)}</td>
+          <td>${new Date(f.foundAt).toLocaleDateString()}</td>
+        </tr>
+      `).join('') : `<tr><td colspan="4" style="color:var(--text-low);">No fake accounts found so far.</td></tr>`;
+      listEl.innerHTML = officialAccounts.length
+        ? officialAccounts.map((a) => `<li>${escapeHtml(PLATFORM_NAMES[a.platform] || a.platform)}: <a href="${escapeAttr(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid);">@${escapeHtml(a.handle)}</a></li>`).join('')
+        : '<li style="color:var(--text-low); list-style:none; margin-left:-20px;">None added yet</li>';
+    } catch (err) {
+      console.error('Fake accounts load error:', err);
+      rowsEl.innerHTML = `<tr><td colspan="4" style="color:var(--text-low);">Could not load fake accounts. Please refresh.</td></tr>`;
+    }
+  }
+
+  document.getElementById('add-official-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('add-official-status');
+    const url = document.getElementById('new-official').value.trim();
+    if (!url) return;
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/dashboard/add-official-account`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not add account');
+      statusEl.textContent = data.message;
+      statusEl.style.color = 'var(--sage)';
+      document.getElementById('new-official').value = '';
+      loadFakeAccounts();
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = 'var(--rust)';
+    }
+  });
 
   function renderProfile(data) {
     document.getElementById('profile-platforms-text').textContent = data.platforms.join(', ') || 'None set';

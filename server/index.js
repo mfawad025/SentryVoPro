@@ -637,6 +637,42 @@ app.post('/api/dashboard/add-original-link', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- Dashboard: fake accounts ----------------
+// Accounts the admin confirmed as fake, and the client's own accounts.
+app.get('/api/dashboard/fake-accounts', requireAuth, async (req, res) => {
+  try {
+    const target = await resolveTargetUser(req);
+    if (!target) return res.status(403).json({ error: 'Not authorized to view this account' });
+    const fakeAccounts = (await db.getImpersonationsForUser(target.id)).map((f) => ({
+      id: f.id, platform: f.platform, handle: f.handle, url: f.url, status: f.status,
+      foundAt: f.found_at, reportedAt: f.reported_at, removedAt: f.removed_at,
+    }));
+    res.json({ fakeAccounts, officialAccounts: await db.getOfficialAccounts(target.id) });
+  } catch (err) {
+    console.error('Fake accounts error:', err.message);
+    res.status(500).json({ error: 'Could not load fake accounts' });
+  }
+});
+
+// Adds one of the client's own profiles (e.g. https://instagram.com/name),
+// so it's never flagged as a fake account.
+app.post('/api/dashboard/add-official-account', requireAuth, async (req, res) => {
+  try {
+    const { profileHandle, impersonationPlatform } = require('./constants');
+    const url = String(req.body?.url || '').trim();
+    const platform = impersonationPlatform(url);
+    const handle = profileHandle(url);
+    if (!/^https?:\/\//i.test(url) || !platform || !handle) {
+      return res.status(400).json({ error: 'Paste the full link to your profile, e.g. https://instagram.com/yourname' });
+    }
+    await db.addOfficialAccount(req.user.id, { platform, handle, url });
+    res.json({ ok: true, message: `Added @${handle}. It will never be flagged as a fake account.` });
+  } catch (err) {
+    console.error('Add official account error:', err.message);
+    res.status(500).json({ error: 'Could not add account' });
+  }
+});
+
 // Change password while logged in — different from the forgot-password
 // flow, which is for when you DON'T have access to your account. This
 // requires knowing your current password first.
@@ -837,6 +873,114 @@ app.post('/api/leak-action', express.urlencoded({ extended: false }), async (req
     res.send(leakActionPage('Removed', `<p>Done. This link is marked as not a leak and won't appear in the client's dashboard or reports.</p><p style="word-break:break-all;color:#5D5677">${escapeHtmlServer(leak.url)}</p>`));
   } catch (err) {
     console.error('Leak action failed:', err.message);
+    res.status(500).send(leakActionPage('Something went wrong', '<p>Please try again in a moment.</p>'));
+  }
+});
+
+// ---------------- Fake accounts: one-click actions from the admin digest ----------------
+// Same pattern as /api/leak-action: a signed link per account and action
+// opens a page, and only its POST button changes anything. 'kit' is the
+// report kit: the platform's impersonation form plus the text to paste.
+const IMPERSONATION_ACTION_TEXT = {
+  confirm: ['Confirm fake account', "Confirm this account is pretending to be the client? The client will see it in their dashboard and next report, and it moves to \"report it\" in your daily email.", 'Yes, it\'s fake'],
+  not_fake: ['Not a fake account', 'Mark this account as not fake (a fan page, or someone else with the same name)? It won\'t be flagged again.', 'Yes, not fake'],
+  official: ["The client's own account", "Mark this as the client's own account? It's added to their official accounts and never flagged again.", "Yes, it's theirs"],
+  reported: ['Reported', 'Mark this account as reported on the platform?', "Yes, I've reported it"],
+  removed: ['Account gone', 'Mark this account as removed by the platform?', "Yes, it's gone"],
+};
+
+async function checkImpersonationAction(params, res) {
+  const { IMPERSONATION_ACTIONS, impersonationActionToken } = require('./constants');
+  const id = Number(params.id);
+  const action = String(params.a || '');
+  if (!process.env.ADMIN_SECRET_KEY || !Number.isInteger(id) || !IMPERSONATION_ACTIONS.includes(action)
+      || !safeEqual(String(params.t || ''), impersonationActionToken(id, action))) {
+    res.status(403).send(leakActionPage('Link not valid', '<p>This link is not valid. Use the buttons in the latest SentryVo digest email.</p>'));
+    return null;
+  }
+  const imp = await db.getImpersonationById(id);
+  if (!imp) {
+    res.status(404).send(leakActionPage('Account not found', '<p>This account is no longer in SentryVo.</p>'));
+    return null;
+  }
+  return { id, action, imp, user: await db.getUserById(imp.user_id) };
+}
+
+function actionForm(id, action, label, color = '#D82F74') {
+  const { impersonationActionToken } = require('./constants');
+  return `<form method="post" action="/api/impersonation-action" style="margin:14px 0 0">
+        <input type="hidden" name="id" value="${id}"><input type="hidden" name="a" value="${action}"><input type="hidden" name="t" value="${impersonationActionToken(id, action)}">
+        <button style="background:${color};color:#fff;border:0;border-radius:8px;padding:12px 22px;font-size:1rem;font-weight:bold;cursor:pointer">${escapeHtmlServer(label)}</button>
+      </form>`;
+}
+
+function impersonationHeader(imp, user) {
+  const { IMPERSONATION_PLATFORMS } = require('./constants');
+  return `<p style="margin:0 0 4px"><strong>${escapeHtmlServer(IMPERSONATION_PLATFORMS[imp.platform]?.name || imp.platform)}</strong> @${escapeHtmlServer(imp.handle)}</p>
+      <p style="word-break:break-all;margin:0 0 8px"><a href="${escapeHtmlServer(imp.url)}" target="_blank" rel="noopener noreferrer" style="color:#1A1530">${escapeHtmlServer(imp.url)}</a></p>
+      <p style="color:#5D5677;font-size:.9rem;margin:0">Client: ${escapeHtmlServer(user ? `${user.name} (${user.email})` : `#${imp.user_id}`)}<br>Why: ${escapeHtmlServer(imp.reason)}</p>`;
+}
+
+// The report kit: form link, ready-to-paste text and the "I've reported it" button.
+async function reportKitHtml(imp, user) {
+  const { IMPERSONATION_PLATFORMS } = require('./constants');
+  const { buildReportText, officialUrlsFor } = require('./impersonation');
+  const platform = IMPERSONATION_PLATFORMS[imp.platform] || { name: imp.platform, reportForm: null };
+  const text = buildReportText(user, imp, await db.getAliasesForUser(user.id), await officialUrlsFor(user));
+  const form = platform.reportForm
+    ? `<a href="${escapeHtmlServer(platform.reportForm)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1A1530;color:#fff;border-radius:8px;padding:10px 18px;font-weight:bold;text-decoration:none">Open ${escapeHtmlServer(platform.name)}'s impersonation form</a>`
+    : `<p><strong>${escapeHtmlServer(platform.name)}</strong> has no public form: open the profile, use its menu (⋯) → Report → pretending to be someone.</p>`;
+  return `${impersonationHeader(imp, user)}
+      ${imp.report_count ? `<p style="color:#C0392B;font-size:.9rem">Already reported ${imp.report_count} time(s), last on ${escapeHtmlServer(new Date(imp.reported_at).toDateString())}.</p>` : ''}
+      <h3 style="margin:22px 0 8px;font-size:1rem">1. Open the form</h3>${form}
+      <h3 style="margin:22px 0 8px;font-size:1rem">2. Paste this text</h3>
+      <textarea readonly onclick="this.select()" style="width:100%;box-sizing:border-box;height:260px;font:13px/1.45 monospace;padding:10px;border:1px solid #ccc;border-radius:8px">${escapeHtmlServer(text)}</textarea>
+      <p style="font-size:.85rem;color:#5D5677">The form may ask for a photo of the client's ID or proof that you represent them. Keep these on file for each client.</p>
+      <h3 style="margin:22px 0 0;font-size:1rem">3. After submitting</h3>
+      ${actionForm(imp.id, 'reported', "I've reported it", '#0B8F7C')}`;
+}
+
+app.get('/api/impersonation-action', async (req, res) => {
+  try {
+    const found = await checkImpersonationAction(req.query, res);
+    if (!found) return;
+    const { id, action, imp, user } = found;
+    if (action === 'kit') {
+      return res.send(leakActionPage('Report kit', await reportKitHtml(imp, user)));
+    }
+    const [title, question, button] = IMPERSONATION_ACTION_TEXT[action];
+    res.send(leakActionPage(title, `${impersonationHeader(imp, user)}
+      <p style="color:#888;font-size:.9rem">Current status: ${escapeHtmlServer(imp.status)}</p>
+      <p>${escapeHtmlServer(question)}</p>
+      ${actionForm(id, action, button, action === 'not_fake' ? '#888' : action === 'confirm' ? '#D82F74' : '#0B8F7C')}`));
+  } catch (err) {
+    console.error('Impersonation action page failed:', err.message);
+    res.status(500).send(leakActionPage('Something went wrong', '<p>Please try again in a moment.</p>'));
+  }
+});
+
+app.post('/api/impersonation-action', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const found = await checkImpersonationAction(req.body || {}, res);
+    if (!found) return;
+    const { id, action, imp, user } = found;
+    if (action === 'kit') return res.status(400).send(leakActionPage('Nothing to do', '<p>Open the report kit link instead.</p>'));
+    if (action === 'confirm') {
+      await db.setImpersonationStatus(id, 'confirmed');
+      console.log(`Fake account ${id} confirmed by admin.`);
+      return res.send(leakActionPage('Confirmed: now report it', await reportKitHtml({ ...imp, status: 'confirmed' }, user)));
+    }
+    if (action === 'official') {
+      await db.addOfficialAccount(imp.user_id, { platform: imp.platform, handle: imp.handle, url: imp.url });
+      console.log(`Fake account ${id} marked as the client's own by admin.`);
+      return res.send(leakActionPage('Saved', "<p>Done. This is now one of the client's own accounts and won't be flagged again.</p>"));
+    }
+    await db.setImpersonationStatus(id, action === 'not_fake' ? 'dismissed' : action);
+    console.log(`Fake account ${id} set to ${action} by admin.`);
+    const done = { not_fake: "Marked as not fake. It won't be flagged again.", reported: `Marked as reported. If it's still up in ${require('./impersonation').REREPORT_DAYS} days it comes back in your daily email to report again.`, removed: 'Marked as removed. The client sees it as removed.' };
+    res.send(leakActionPage('Done', `<p>${escapeHtmlServer(done[action])}</p>`));
+  } catch (err) {
+    console.error('Impersonation action failed:', err.message);
     res.status(500).send(leakActionPage('Something went wrong', '<p>Please try again in a moment.</p>'));
   }
 });
@@ -1513,7 +1657,7 @@ app.get('/api/admin/send-report', async (req, res) => {
     const leaks = (await db.getAllLeaksForUser(user.id, { limit: 2000, offset: 0 })).filter((l) => l.status !== 'dismissed');
     const summary = await db.getLeakSummary(user.id);
     const { sendDailyReportEmail } = require('./emailReport');
-    const mail = await sendDailyReportEmail(user, leaks, summary);
+    const mail = await sendDailyReportEmail(user, leaks, summary, await db.getImpersonationsForUser(user.id));
     await db.logReportSent(user.id, leaks.length);
     await db.markReportSentNow(user.id);
     res.json({ ok: true, message: `Report with ${leaks.length} link(s) handed to the mail server for ${user.email}`, mail, scanResult });
@@ -1542,6 +1686,34 @@ app.get('/api/admin/leak-debug', async (req, res) => {
     }));
     res.json({ ok: true, dismissed: ids, leaks });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------- Admin: a client's fake accounts ----------------
+// GET /api/admin/impersonations?key=KEY&email=client@example.com[&scan=1]
+// Lists every fake-account candidate (all statuses, with action links) and
+// the client's official accounts. scan=1 runs the fake-account search now,
+// ignoring the once-a-day limit (costs Serper credits).
+app.get('/api/admin/impersonations', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const user = await db.getUserByEmail(String(req.query.email || '').trim());
+    if (!user) return res.status(404).json({ error: 'No client with that email' });
+    let scan = null;
+    if (req.query.scan === '1') {
+      const { runImpersonationSearch } = require('./impersonation');
+      scan = await runImpersonationSearch(user, await db.getAliasesForUser(user.id), await db.getOriginalLinksForUser(user.id), await db.getFingerprintsForUser(user.id), { force: true });
+    }
+    const { impersonationActionUrl } = require('./constants');
+    const accounts = (await db.getImpersonationsForUser(user.id, { includeAll: true })).map((f) => ({
+      id: f.id, status: f.status, platform: f.platform, handle: f.handle, url: f.url, reason: f.reason,
+      foundAt: f.found_at, reportCount: f.report_count,
+      actions: Object.fromEntries(['kit', 'confirm', 'not_fake', 'official', 'reported', 'removed'].map((a) => [a, impersonationActionUrl(f.id, a)])),
+    }));
+    res.json({ ok: true, scan, officialAccounts: await db.getOfficialAccounts(user.id), accounts });
+  } catch (err) {
+    console.error('Admin impersonations error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

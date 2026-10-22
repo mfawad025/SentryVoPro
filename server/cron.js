@@ -38,10 +38,13 @@ async function sendAdminDigestIfNeeded({ includeSent = false } = {}) {
   try {
     const pendingLeaks = await db.getPendingAdminDigestLeaks({ includeSent });
     const status = await buildClientStatus();
-    await sendAdminDigestEmail(pendingLeaks, status);
+    // Fake accounts are repeated every day until handled, so nothing is marked sent.
+    const { REREPORT_DAYS } = require('./impersonation');
+    const fakes = await db.getImpersonationsForDigest(REREPORT_DAYS);
+    await sendAdminDigestEmail(pendingLeaks, status, fakes, REREPORT_DAYS);
     await db.markLeaksDigestSent(pendingLeaks.map((l) => l.id));
-    console.log(`Admin daily email sent: ${pendingLeaks.length} link(s), ${status.length} client(s).`);
-    return { sent: pendingLeaks.length, clients: status.length };
+    console.log(`Admin daily email sent: ${pendingLeaks.length} link(s), ${fakes.length} fake account(s), ${status.length} client(s).`);
+    return { sent: pendingLeaks.length, fakeAccounts: fakes.length, clients: status.length };
   } catch (err) {
     console.error('Admin daily email failed:', err.message);
     return { sent: 0, error: err.message };

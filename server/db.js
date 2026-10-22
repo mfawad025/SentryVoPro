@@ -208,6 +208,43 @@ async function initSchema() {
       value TEXT,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Fake accounts (impersonation.js). One row per client, platform and
+    -- username. status: pending (admin only) -> confirmed -> reported ->
+    -- removed; or dismissed (not fake) / official (the client's own).
+    CREATE TABLE IF NOT EXISTS impersonations (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      handle TEXT NOT NULL,
+      url TEXT NOT NULL,
+      title TEXT,
+      reason TEXT,
+      fingerprint_distance INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending',
+      found_at TIMESTAMPTZ DEFAULT NOW(),
+      confirmed_at TIMESTAMPTZ,
+      reported_at TIMESTAMPTZ,
+      removed_at TIMESTAMPTZ,
+      report_count INTEGER NOT NULL DEFAULT 0,
+      UNIQUE (user_id, platform, handle)
+    );
+
+    -- The client's own accounts on big platforms, so they're never flagged
+    -- as fake. Kept apart from original_links on purpose: an original link
+    -- covers its whole site for the leak scan, which would hide every leak
+    -- on instagram.com just because the client's own Instagram was added.
+    CREATE TABLE IF NOT EXISTS official_accounts (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      handle TEXT NOT NULL,
+      url TEXT NOT NULL,
+      added_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (user_id, platform, handle)
+    );
+
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_impersonation_at TIMESTAMPTZ;
   `);
 
   // Big-platform links (status 'manual_review') are shown to the client only
@@ -766,6 +803,106 @@ async function markLeaksDigestSent(leakIds) {
   await pool.query(`UPDATE leaks SET admin_digest_sent_at = NOW() WHERE id = ANY($1::int[])`, [leakIds]);
 }
 
+// ---------- Fake accounts (impersonation) ----------
+// What the client sees: accounts the admin confirmed as fake.
+const IMPERSONATION_CLIENT_VISIBLE = ['confirmed', 'reported', 'removed'];
+
+async function insertImpersonation({ userId, platform, handle, url, title, reason, fingerprintDistance = null }) {
+  const result = await pool.query(
+    `INSERT INTO impersonations (user_id, platform, handle, url, title, reason, fingerprint_distance)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (user_id, platform, handle) DO NOTHING RETURNING id`,
+    [userId, platform, handle, url, title, reason, fingerprintDistance]
+  );
+  return result.rows[0] || null;
+}
+
+async function countImpersonations(userId) {
+  const result = await pool.query(`SELECT COUNT(*)::int AS n FROM impersonations WHERE user_id = $1`, [userId]);
+  return result.rows[0].n;
+}
+
+async function getImpersonationById(id) {
+  const result = await pool.query(`SELECT * FROM impersonations WHERE id = $1`, [id]);
+  return result.rows[0] || null;
+}
+
+async function getImpersonationsByStatus(userId, statuses) {
+  const result = await pool.query(
+    `SELECT * FROM impersonations WHERE user_id = $1 AND status = ANY($2::text[]) ORDER BY found_at ASC`,
+    [userId, statuses]
+  );
+  return result.rows;
+}
+
+// includeAll: admin view (every status); otherwise only what the client sees.
+async function getImpersonationsForUser(userId, { includeAll = false } = {}) {
+  const result = await pool.query(
+    `SELECT * FROM impersonations WHERE user_id = $1 AND ($2::boolean OR status = ANY($3::text[])) ORDER BY found_at DESC`,
+    [userId, includeAll, IMPERSONATION_CLIENT_VISIBLE]
+  );
+  return result.rows;
+}
+
+// Confirmed since the last report, or gone since then, for the report email.
+async function getImpersonationUpdatesSince(userId, isoTimestamp) {
+  const result = await pool.query(
+    `SELECT * FROM impersonations WHERE user_id = $1 AND status = ANY($3::text[])
+       AND (confirmed_at >= $2 OR removed_at >= $2) ORDER BY found_at DESC`,
+    [userId, isoTimestamp, IMPERSONATION_CLIENT_VISIBLE]
+  );
+  return result.rows;
+}
+
+async function setImpersonationStatus(id, status) {
+  const stamp = { confirmed: 'confirmed_at', removed: 'removed_at' }[status];
+  if (status === 'reported') {
+    await pool.query(`UPDATE impersonations SET status = 'reported', reported_at = NOW(), report_count = report_count + 1 WHERE id = $1`, [id]);
+  } else if (stamp) {
+    await pool.query(`UPDATE impersonations SET status = $1, ${stamp} = NOW() WHERE id = $2`, [status, id]);
+  } else {
+    await pool.query(`UPDATE impersonations SET status = $1 WHERE id = $2`, [status, id]);
+  }
+}
+
+// For the admin digest, repeated daily until handled: accounts waiting for
+// review, confirmed ones not yet reported, and reported ones still up after
+// rereportDays (to report again).
+async function getImpersonationsForDigest(rereportDays) {
+  const result = await pool.query(`
+    SELECT impersonations.*, users.name AS creator_name, users.email AS creator_email
+    FROM impersonations JOIN users ON users.id = impersonations.user_id
+    WHERE users.status = 'active'
+      AND (impersonations.status IN ('pending', 'confirmed')
+           OR (impersonations.status = 'reported' AND impersonations.reported_at < NOW() - make_interval(days => $1::int)))
+    ORDER BY impersonations.found_at ASC
+  `, [rereportDays]);
+  return result.rows;
+}
+
+async function markImpersonationRun(userId) {
+  await pool.query(`UPDATE users SET last_impersonation_at = NOW() WHERE id = $1`, [userId]);
+}
+
+async function addOfficialAccount(userId, { platform, handle, url }) {
+  const result = await pool.query(
+    `INSERT INTO official_accounts (user_id, platform, handle, url) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, platform, handle) DO NOTHING RETURNING id`,
+    [userId, platform, handle.toLowerCase(), url]
+  );
+  // Anything already flagged for this account is the client's own.
+  await pool.query(
+    `UPDATE impersonations SET status = 'official' WHERE user_id = $1 AND platform = $2 AND lower(handle) = lower($3)`,
+    [userId, platform, handle]
+  );
+  return result.rowCount ? 'added' : 'exists';
+}
+
+async function getOfficialAccounts(userId) {
+  const result = await pool.query(`SELECT platform, handle, url FROM official_accounts WHERE user_id = $1 ORDER BY id ASC`, [userId]);
+  return result.rows;
+}
+
 // ---------- Admin: find and deactivate an account ----------
 // Used by the emergency admin endpoints in index.js — lets you look up an
 // account by alias or email through a browser, and immediately stop it
@@ -888,4 +1025,15 @@ module.exports = {
   getAgencyOwner,
   getAgencyMembers,
   countAgencyMembers,
+  insertImpersonation,
+  countImpersonations,
+  getImpersonationById,
+  getImpersonationsByStatus,
+  getImpersonationsForUser,
+  getImpersonationUpdatesSince,
+  setImpersonationStatus,
+  getImpersonationsForDigest,
+  markImpersonationRun,
+  addOfficialAccount,
+  getOfficialAccounts,
 };

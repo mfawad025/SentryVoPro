@@ -25,7 +25,8 @@ const db = require('./db');
 const fingerprint = require('./fingerprint');
 const { sendDailyReportEmail } = require('./emailReport');
 const { lookupHostingAndAbuseContacts, findSiteContactEmail, extractMediaLinksFromPage } = require('./hostLookup');
-const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform, getOwnDomainFamilies, matchesAlias, isUnverifiedProfilePage } = require('./constants');
+const impersonation = require('./impersonation');
+const { GOOGLE_REMOVAL_TOOL_URL, isMajorPlatform, getOwnDomainFamilies, matchesAlias, isUnverifiedProfilePage, profileHandle } = require('./constants');
 
 // Google does not offer a public API for third parties to submit copyright
 // removal requests — their "Remove content from Google" tool is a web form
@@ -207,7 +208,16 @@ async function pickLensImages(user, originalLinks) {
   return Array.from({ length: LENS_IMAGES_PER_DAY }, (_, i) => urls[(start + i) % urls.length]);
 }
 
-async function runReverseImageSearch(user, aliases, originalLinks, fingerprints) {
+// With the fake-account monitor on (officialKeys set), a big-platform
+// profile page that matched only by name is a fake-account candidate
+// (impersonation.js), not a copyright leak. A profile whose picture matched
+// the client's photo stays a leak. Returns true when handled here.
+async function routeProfileToImpersonation(user, result, aliases, officialKeys, distance = null) {
+  if (!officialKeys || (distance !== null && distance !== undefined) || profileHandle(result.url) === null) return false;
+  return impersonation.recordProfileCandidate(user, { url: result.url, title: result.title }, aliases, officialKeys);
+}
+
+async function runReverseImageSearch(user, aliases, originalLinks, fingerprints, officialKeys = null) {
   const out = { queries: 0, failed: 0, matches: 0, reasons: [] };
   if (!LENS_IMAGES_PER_DAY) return out;
   if (user.last_lens_at && Date.now() - new Date(user.last_lens_at).getTime() < LENS_INTERVAL_MS) return out;
@@ -249,6 +259,7 @@ async function runReverseImageSearch(user, aliases, originalLinks, fingerprints)
           const distance = fingerprint.bestMatch(hashes[j], compareTo, LENS_MAX_DISTANCE);
           if (!alias && distance === null) continue;
           if (isUnverifiedProfilePage(r.url, aliases, distance)) continue;
+          if (await routeProfileToImpersonation(user, r, aliases, officialKeys, distance)) continue;
           if (distance !== null) out.matches++;
           await db.insertLeak({
             userId: user.id,
@@ -632,6 +643,8 @@ async function runDailyScanForUser(user) {
   let pageCheckBudget = MAX_PAGE_CHECKS_PER_SCAN;
   let searchExpansionBudget = MAX_SEARCH_EXPANSIONS_PER_SCAN;
   const siteGroups = await getLeakSiteGroups();
+  // The client's own big-platform accounts, when the fake-account monitor is on.
+  const officialKeys = impersonation.impersonationEnabledFor(user) ? await impersonation.getOfficialKeys(user.id, originalLinks) : null;
 
   for (const alias of aliases) {
     // Text search: leak-site mentions, forum posts, social platform posts,
@@ -667,6 +680,7 @@ async function runDailyScanForUser(user) {
                 if (!matchesAlias(alias, item.url, item.text)) continue;
                 if (isUnverifiedProfilePage(item.url, aliases)) continue;
                 if (await db.leakExists(user.id, item.url)) continue;
+                if (await routeProfileToImpersonation(user, { url: item.url, title: item.text }, aliases, officialKeys)) continue;
                 await db.insertLeak({
                   userId: user.id,
                   url: item.url,
@@ -694,6 +708,7 @@ async function runDailyScanForUser(user) {
           // tag cloud or "related" text, which can name the client on pages
           // that have nothing to do with them.
           if (matchesAlias(alias, result.url, result.title) && !isUnverifiedProfilePage(result.url, aliases)) {
+            if (await routeProfileToImpersonation(user, result, aliases, officialKeys)) continue;
             await db.insertLeak({
               userId: user.id,
               url: result.url,
@@ -824,11 +839,17 @@ async function runDailyScanForUser(user) {
   }
 
   // Reverse image search with the client's own photos (at most once a day).
-  const lens = await runReverseImageSearch(user, aliases, originalLinks, fingerprints);
+  const lens = await runReverseImageSearch(user, aliases, originalLinks, fingerprints, officialKeys);
   queriesRun += lens.queries;
   queriesFailed += lens.failed;
   fingerprintMatches += lens.matches;
   failureReasons.push(...lens.reasons);
+
+  // Fake-account search (at most once a day, see impersonation.js).
+  const fakes = await impersonation.runImpersonationSearch(user, aliases, originalLinks, fingerprints);
+  queriesRun += fakes.queries;
+  queriesFailed += fakes.failed;
+  failureReasons.push(...fakes.reasons);
 
   // If a meaningful share of this user's queries errored out (Serper quota
   // exhausted, rate-limited, down, etc.), say so loudly in the logs — a scan
@@ -953,8 +974,9 @@ async function sendReportIfDue(user, fallbackSince = new Date().toISOString()) {
   const sinceTimestamp = user.last_report_at || fallbackSince;
   const leaksSinceLastReport = await db.getLeaksFoundSince(user.id, sinceTimestamp);
   const summary = await db.getLeakSummary(user.id);
+  const fakeAccounts = await db.getImpersonationUpdatesSince(user.id, sinceTimestamp);
 
-  await sendDailyReportEmail(user, leaksSinceLastReport, summary);
+  await sendDailyReportEmail(user, leaksSinceLastReport, summary, fakeAccounts);
   await db.logReportSent(user.id, leaksSinceLastReport.length);
   await db.markReportSentNow(user.id);
   return { reportSent: true, newLeaks: leaksSinceLastReport.length, summary };

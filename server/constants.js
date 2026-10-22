@@ -180,6 +180,35 @@ function isUnverifiedProfilePage(url, aliases, fingerprintDistance = null) {
   return !(aliases || []).filter(Boolean).some((a) => matchesAlias(a, handle));
 }
 
+// ---- Fake accounts (impersonation) ----
+// Platforms the fake-account monitor knows (impersonation.js). searchDomain
+// is used in the daily "alias" site: search; reportForm is the platform's
+// own impersonation form (null = report from the profile's own menu).
+// These forms change from time to time: if one stops working, update it here.
+const IMPERSONATION_PLATFORMS = {
+  instagram: { name: 'Instagram', domains: ['instagram.com', 'instagr.am'], searchDomain: 'instagram.com', reportForm: 'https://help.instagram.com/contact/636276399721841' },
+  threads: { name: 'Threads', domains: ['threads.net', 'threads.com'], searchDomain: 'threads.net', reportForm: 'https://help.instagram.com/contact/636276399721841' },
+  tiktok: { name: 'TikTok', domains: ['tiktok.com'], searchDomain: 'tiktok.com', reportForm: 'https://support.tiktok.com/en/safety-hc/report-a-problem/report-an-impersonation-account' },
+  x: { name: 'X (Twitter)', domains: ['x.com', 'twitter.com'], searchDomain: 'x.com', reportForm: 'https://help.x.com/en/safety-and-security/report-twitter-impersonation' },
+  facebook: { name: 'Facebook', domains: ['facebook.com', 'fb.com'], searchDomain: 'facebook.com', reportForm: 'https://www.facebook.com/help/174210519303259' },
+  youtube: { name: 'YouTube', domains: ['youtube.com'], searchDomain: 'youtube.com', reportForm: 'https://support.google.com/youtube/answer/2801947' },
+  reddit: { name: 'Reddit', domains: ['reddit.com'], searchDomain: 'reddit.com', reportForm: 'https://support.reddithelp.com/hc/en-us/requests/new' },
+  pinterest: { name: 'Pinterest', domains: ['pinterest.com'], searchDomain: 'pinterest.com', reportForm: null },
+  tumblr: { name: 'Tumblr', domains: ['tumblr.com'], searchDomain: 'tumblr.com', reportForm: null },
+  snapchat: { name: 'Snapchat', domains: ['snapchat.com'], searchDomain: 'snapchat.com', reportForm: null },
+  linkedin: { name: 'LinkedIn', domains: ['linkedin.com'], searchDomain: 'linkedin.com', reportForm: null },
+};
+
+// The IMPERSONATION_PLATFORMS key for a URL, or null.
+function impersonationPlatform(url) {
+  let host;
+  try { host = new URL(url).hostname.replace(/^(www|m|mobile|old)\./, '').toLowerCase(); } catch { return null; }
+  for (const [key, p] of Object.entries(IMPERSONATION_PLATFORMS)) {
+    if (p.domains.some((d) => host === d || host.endsWith(`.${d}`))) return key;
+  }
+  return null;
+}
+
 // ---- Local time for the daily emails ----
 // Client reports and the admin's daily email go out at a fixed local time
 // (REPORT_HOUR in REPORT_TIMEZONE, default 9:00 Pakistan time), not at
@@ -221,7 +250,26 @@ function leakActionUrl(id, action) {
   return `${base}/api/leak-action?id=${id}&a=${action}&t=${leakActionToken(id, action)}`;
 }
 
+// Same signed links for fake accounts. 'kit' opens the report kit page;
+// the others change the account's status.
+const IMPERSONATION_ACTIONS = ['kit', 'confirm', 'not_fake', 'official', 'reported', 'removed'];
+
+function impersonationActionToken(id, action) {
+  const secret = process.env.ADMIN_SECRET_KEY || '';
+  return require('crypto').createHmac('sha256', secret).update(`impersonation-action:${action}:${id}`).digest('hex').slice(0, 32);
+}
+
+function impersonationActionUrl(id, action) {
+  const base = (process.env.API_PUBLIC_URL || 'https://api.sentryvo.com').replace(/\/$/, '');
+  return `${base}/api/impersonation-action?id=${id}&a=${action}&t=${impersonationActionToken(id, action)}`;
+}
+
 module.exports = {
+  IMPERSONATION_PLATFORMS,
+  impersonationPlatform,
+  IMPERSONATION_ACTIONS,
+  impersonationActionToken,
+  impersonationActionUrl,
   REPORT_TIMEZONE,
   REPORT_HOUR,
   localTime,

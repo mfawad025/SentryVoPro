@@ -1,7 +1,7 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { buildLeakExcelBuffer } = require('./excelReport');
-const { GOOGLE_REMOVAL_TOOL_URL, GOOGLE_DMCA_FORM_URL, googleDelistUrl, getMajorPlatformReportLink, matchesAlias, leakActionUrl, formatLocalTime, REPORT_TIMEZONE } = require('./constants');
+const { GOOGLE_REMOVAL_TOOL_URL, GOOGLE_DMCA_FORM_URL, googleDelistUrl, getMajorPlatformReportLink, matchesAlias, leakActionUrl, formatLocalTime, REPORT_TIMEZONE, IMPERSONATION_PLATFORMS, impersonationActionUrl } = require('./constants');
 
 function getMailer() {
   if (!process.env.SMTP_HOST || process.env.SMTP_HOST === 'smtp.yourprovider.com') return null;
@@ -29,7 +29,28 @@ function esc(str) {
   return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function buildReportHtml(user, newLeaks, summary) {
+// Client-facing wording for a fake account's status.
+const FAKE_STATUS_LABELS = { confirmed: 'Confirmed fake, being reported', reported: 'Reported to the platform', removed: 'Removed' };
+
+function platformName(key) {
+  return IMPERSONATION_PLATFORMS[key]?.name || key;
+}
+
+function buildFakeAccountsHtml(fakeAccounts) {
+  if (!fakeAccounts || !fakeAccounts.length) return '';
+  const rows = fakeAccounts.map((f) => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #F1EBE0;color:#2A2621;font-size:14px;">${esc(platformName(f.platform))}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #F1EBE0;"><a href="${esc(f.url)}" style="color:#2A2621;font-size:13px;word-break:break-all;">@${esc(f.handle)}</a></td>
+        <td style="padding:10px 0;border-bottom:1px solid #F1EBE0;color:${f.status === 'removed' ? '#22C3A6' : '#5B8DEF'};font-size:12px;">${esc(FAKE_STATUS_LABELS[f.status] || f.status)}</td>
+      </tr>`).join('');
+  return `
+      <h3 style="color:#2A2621;font-size:15px;margin:26px 0 10px;">Fake accounts (${fakeAccounts.length})</h3>
+      <p style="color:#8C8275;font-size:13px;margin:0 0 8px;">Accounts pretending to be you. We report each one to the platform and keep following up; the platform decides whether to remove it.</p>
+      <table style="width:100%;border-collapse:collapse;"><tbody>${rows}</tbody></table>`;
+}
+
+function buildReportHtml(user, newLeaks, summary, fakeAccounts = []) {
   const rows = newLeaks
     .map(
       (leak) => `
@@ -70,6 +91,7 @@ function buildReportHtml(user, newLeaks, summary) {
       <table style="width:100%;border-collapse:collapse;">
         <tbody>${newLeaks.length ? rows : noNewLeaksRow}</tbody>
       </table>
+${buildFakeAccountsHtml(fakeAccounts)}
 
       <p style="color:#6b6480;font-size:12px;margin-top:28px;">
         Automatic takedown notices are best-effort and may need manual follow-up for some hosts. Log in to your dashboard for full case history.
@@ -78,9 +100,9 @@ function buildReportHtml(user, newLeaks, summary) {
   </div>`;
 }
 
-async function sendDailyReportEmail(user, newLeaks, summary) {
+async function sendDailyReportEmail(user, newLeaks, summary, fakeAccounts = []) {
   const mailer = getMailer();
-  const html = buildReportHtml(user, newLeaks, summary);
+  const html = buildReportHtml(user, newLeaks, summary, fakeAccounts);
 
   if (!mailer) {
     // Fail loudly: silently "succeeding" here made reports look sent (and
@@ -108,7 +130,7 @@ async function sendDailyReportEmail(user, newLeaks, summary) {
     // Admin-added (Fiverr) clients: the admin gets a copy of every report,
     // so the link details are never missed if the client's inbox hides it.
     bcc: user.source === 'fiverr' ? (process.env.ADMIN_DIGEST_EMAIL || process.env.SMTP_USER || undefined) : undefined,
-    subject: `SentryVo Daily Report — ${newLeaks.length} new item(s)`,
+    subject: `SentryVo Daily Report — ${newLeaks.length} new item(s)${fakeAccounts.length ? `, ${fakeAccounts.length} fake account update(s)` : ''}`,
     html,
     attachments,
   });
@@ -262,7 +284,48 @@ function buildClientStatusHtml(status) {
       <p style="margin:6px 0 0; font-size:.75rem; color:#888;">Times are ${esc(REPORT_TIMEZONE)} time.</p>`;
 }
 
-function buildAdminDigestHtml(leaks, status = null) {
+// "Fake accounts" part of the admin's daily email. Each row's buttons
+// depend on where the account is: waiting for review, confirmed but not yet
+// reported, or reported a while ago and still up.
+function buildImpersonationDigestHtml(fakes, rereportDays) {
+  if (!fakes || !fakes.length) return '';
+  const cell = 'padding:7px 10px; border-bottom:1px solid #eee; vertical-align:top;';
+  const link = (href, label, color = '#D82F74') => `<a href="${esc(href)}" style="color:${color}; font-weight:bold; text-decoration:none;">${label}</a>`;
+  const byCreator = {};
+  for (const f of fakes) {
+    if (!byCreator[f.creator_email]) byCreator[f.creator_email] = { name: f.creator_name, email: f.creator_email, rows: [] };
+    byCreator[f.creator_email].rows.push(f);
+  }
+  const sections = Object.values(byCreator).map((c) => {
+    const rows = c.rows.map((f) => {
+      let note;
+      let buttons;
+      if (f.status === 'pending') {
+        note = '<span style="color:#C77A12; font-weight:bold;">Waiting for your review: the client sees it only after you confirm.</span>';
+        buttons = `${link(impersonationActionUrl(f.id, 'confirm'), 'Confirm fake')}<br><span style="font-size:.78rem;">${link(impersonationActionUrl(f.id, 'official'), "It's theirs", '#0B8F7C')} · ${link(impersonationActionUrl(f.id, 'not_fake'), 'Not fake', '#888')}</span>`;
+      } else if (f.status === 'confirmed') {
+        note = '<span style="color:#C77A12; font-weight:bold;">Confirmed: report it on the platform.</span>';
+        buttons = `${link(impersonationActionUrl(f.id, 'kit'), 'Open report kit')}<br><span style="font-size:.78rem;">${link(impersonationActionUrl(f.id, 'not_fake'), 'Not fake', '#888')}</span>`;
+      } else {
+        note = `<span style="color:#C0392B; font-weight:bold;">Reported ${f.report_count} time(s), still up after ${rereportDays}+ days: report again.</span>`;
+        buttons = `${link(impersonationActionUrl(f.id, 'kit'), 'Report again')}<br><span style="font-size:.78rem;">${link(impersonationActionUrl(f.id, 'removed'), "It's gone", '#0B8F7C')}</span>`;
+      }
+      return `
+      <tr><td style="${cell} word-break:break-all;"><strong>${esc(platformName(f.platform))}</strong> @${esc(f.handle)}<br><a href="${esc(f.url)}" style="color:#1A1530;">${esc(f.url)}</a>
+        <br><span style="color:#888; font-size:.78rem;">Why: ${esc(f.reason)}</span><br><span style="font-size:.78rem;">${note}</span></td>
+        <td style="${cell} white-space:nowrap; text-align:right;">${buttons}</td></tr>`;
+    }).join('');
+    return `
+      <p style="margin:16px 0 4px; font-weight:bold;">${esc(c.name)} <span style="font-weight:normal; color:#666; font-size:.85rem;">(${esc(c.email)})</span></p>
+      <table style="width:100%; border-collapse:collapse; font-size:.85rem;">${rows}</table>`;
+  }).join('');
+  return `
+      <h3 style="margin:28px 0 4px;">Fake accounts (${fakes.length})</h3>
+      <p style="margin-top:0; font-size:.85rem; color:#555;">Open each profile first. Confirm only real impersonations: fan pages and other people with the same name are "Not fake". "It's theirs" adds the account to the client's own accounts so it's never flagged again. The report kit has the platform's form and the text to paste; press "I've reported it" there after submitting.</p>
+      ${sections}`;
+}
+
+function buildAdminDigestHtml(leaks, status = null, fakes = [], rereportDays = 7) {
   const byCreator = {};
   for (const leak of leaks) {
     const key = leak.creator_email;
@@ -317,6 +380,7 @@ function buildAdminDigestHtml(leaks, status = null) {
     <div style="font-family:Arial,sans-serif; max-width:680px; margin:0 auto; color:#1A1530;">
       <h2 style="color:#D82F74; margin-bottom:4px;">SentryVo · Daily summary</h2>
       ${status ? buildClientStatusHtml(status) : ''}
+      ${buildImpersonationDigestHtml(fakes, rereportDays)}
       <h3 style="margin:28px 0 4px;">Links to report today</h3>
       ${leaks.length ? `
       <p style="margin-top:0;">${leaks.length} link(s) across ${Object.keys(byCreator).length} creator(s).</p>
@@ -326,7 +390,7 @@ function buildAdminDigestHtml(leaks, status = null) {
   `;
 }
 
-async function sendAdminDigestEmail(leaks, status = null) {
+async function sendAdminDigestEmail(leaks, status = null, fakes = [], rereportDays = 7) {
   const mailer = getMailer();
   if (!mailer) {
     throw new Error('SMTP is not configured (SMTP_HOST is missing or still the placeholder value)');
@@ -356,8 +420,9 @@ async function sendAdminDigestEmail(leaks, status = null) {
   await mailer.sendMail({
     from: process.env.REPORT_FROM_EMAIL,
     to: adminEmail,
-    subject: leaks.length ? `SentryVo daily summary — ${leaks.length} link(s) to report` : 'SentryVo daily summary — no new links today',
-    html: buildAdminDigestHtml(leaks, status),
+    subject: (leaks.length ? `SentryVo daily summary — ${leaks.length} link(s) to report` : 'SentryVo daily summary — no new links today')
+      + (fakes.length ? `, ${fakes.length} fake account(s)` : ''),
+    html: buildAdminDigestHtml(leaks, status, fakes, rereportDays),
     attachments: lines.length
       ? [{ filename: `google-delist-links-${new Date().toISOString().slice(0, 10)}.txt`, content: lines.join('\n'), contentType: 'text/plain' }]
       : [],

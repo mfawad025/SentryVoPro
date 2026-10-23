@@ -1523,6 +1523,86 @@ app.get('/api/admin/send-report', async (req, res) => {
   }
 });
 
+// ---------------- Admin: partner referrals ----------------
+// https://api.sentryvo.com/api/admin/referrals?key=ADMIN_KEY[&code=KITSY][&rate=30][&format=json]
+// For partners paid by hand (no Lemon Squeezy account): a partner shares
+// https://www.sentryvo.com/?aff=CODE, the site remembers the code for 60
+// days and saves it on the account of anyone who signs up (users.referral_code).
+// This page lists, per code, every account that signed up with it, whether
+// it is paying now, and — with &rate= (commission %) — this month's
+// commission on the paying ones at their regular monthly price.
+const PLAN_MONTHLY_PRICE = { single: 50, multi: 100, agency_starter: 200, agency_growth: 500 };
+const PLAN_LABEL = { single: 'Single', multi: 'Multiple', agency_starter: 'Agency Starter', agency_growth: 'Agency Growth', agency_enterprise: 'Agency Enterprise' };
+
+app.get('/api/admin/referrals', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const filter = String(req.query.code || '').trim().toLowerCase();
+    const rate = Math.min(100, Math.max(0, Number(req.query.rate) || 0));
+    const now = Date.now();
+    const partners = new Map();
+    for (const u of await db.getReferredUsers()) {
+      const key = u.referral_code.toLowerCase();
+      if (filter && key !== filter) continue;
+      if (!partners.has(key)) partners.set(key, { code: u.referral_code, clients: [] });
+      const paying = u.status === 'active';
+      const price = PLAN_MONTHLY_PRICE[u.plan] ?? null;
+      partners.get(key).clients.push({
+        name: u.name,
+        email: u.email,
+        plan: PLAN_LABEL[u.plan] || u.plan,
+        status: u.status,
+        paying,
+        signedUp: u.created_at,
+        monthsAsCustomer: Math.max(1, Math.ceil((now - new Date(u.created_at).getTime()) / (30.44 * 86400000))),
+        monthlyPrice: price,
+      });
+    }
+    const list = [...partners.values()].map((p) => {
+      const paying = p.clients.filter((c) => c.paying);
+      const monthlyRevenue = paying.reduce((sum, c) => sum + (c.monthlyPrice || 0), 0);
+      return {
+        ...p,
+        signups: p.clients.length,
+        payingNow: paying.length,
+        monthlyRevenue,
+        commission: rate ? Math.round(monthlyRevenue * rate) / 100 : null,
+      };
+    });
+
+    if (req.query.format === 'json') return res.json({ ok: true, rate: rate || null, partners: list });
+
+    const date = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const statusText = (c) => (c.paying ? '<span style="color:#0B8F7C;font-weight:bold">Paying</span>'
+      : c.status === 'pending_payment' ? '<span style="color:#888">Signed up, not paid</span>'
+      : `<span style="color:#C0392B">${escapeHtmlServer(c.status)}</span>`);
+    const sections = list.map((p) => `
+      <h2 style="margin:34px 0 4px">Code: ${escapeHtmlServer(p.code)}</h2>
+      <p style="margin:0 0 4px;color:#5D5677">Partner link: <strong>https://www.sentryvo.com/?aff=${escapeHtmlServer(p.code)}</strong></p>
+      <p style="margin:0 0 10px">${p.signups} sign-up(s) · <strong>${p.payingNow} paying now</strong> · $${p.monthlyRevenue}/month at regular prices${p.commission !== null ? ` · <strong style="color:#D82F74">commission this month at ${rate}%: $${p.commission.toFixed(2)}</strong>` : ''}</p>
+      <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+        <tr style="text-align:left;color:#857E9E;font-size:.78rem"><th style="padding:6px 8px">Client</th><th style="padding:6px 8px">Plan</th><th style="padding:6px 8px">Status</th><th style="padding:6px 8px">Signed up</th><th style="padding:6px 8px">Months</th><th style="padding:6px 8px">Price/month</th></tr>
+        ${p.clients.map((c) => `<tr style="border-top:1px solid #eee">
+          <td style="padding:7px 8px"><strong>${escapeHtmlServer(c.name)}</strong><br><span style="color:#888;font-size:.8rem">${escapeHtmlServer(c.email)}</span></td>
+          <td style="padding:7px 8px">${escapeHtmlServer(c.plan)}</td><td style="padding:7px 8px">${statusText(c)}</td>
+          <td style="padding:7px 8px;white-space:nowrap">${date(c.signedUp)}</td><td style="padding:7px 8px">${c.monthsAsCustomer}</td>
+          <td style="padding:7px 8px">${c.monthlyPrice === null ? 'custom' : '$' + c.monthlyPrice}</td></tr>`).join('')}
+      </table>`).join('');
+
+    res.set('Cache-Control', 'no-store').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Partner referrals · SentryVo</title></head>
+<body style="margin:0;background:#F4F2F8;font-family:Arial,sans-serif;color:#1A1530">
+<div style="max-width:900px;margin:30px auto;padding:28px;background:#fff;border-radius:14px;border:1px solid #e3dfeb;overflow-x:auto">
+<h1 style="margin:0 0 6px;color:#D82F74;font-size:1.5rem">Partner referrals</h1>
+<p style="margin:0;color:#5D5677;font-size:.9rem">Clients who signed up through a partner link. "Months" counts from the sign-up date. ${rate ? `Commission uses ${rate}% of each paying client's regular monthly price (the discounted first month is not taken into account).` : 'Add <code>&amp;rate=30</code> to the address to work out a 30% commission (any percentage works).'} Add <code>&amp;code=CODE</code> to show one partner only.</p>
+${sections || '<p style="margin-top:24px">No sign-ups with a partner code yet.</p>'}
+</div></body></html>`);
+  } catch (err) {
+    console.error('Admin referrals failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------- Admin: inspect (and dismiss) a client's recent leaks ----------------
 // GET /api/admin/leak-debug?key=KEY&email=client@example.com[&dismiss=12,15]
 // Shows source, fingerprint distance and title for the latest leaks so you can

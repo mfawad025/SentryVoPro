@@ -730,6 +730,17 @@ async function getPendingAdminDigestLeaks({ includeSent = false } = {}) {
   return result.rows;
 }
 
+// Every account that signed up with a partner's referral code (?aff=CODE),
+// for the admin's referrals page.
+async function getReferredUsers() {
+  const result = await pool.query(
+    `SELECT id, name, email, plan, status, ls_subscription_status, subscription_ends_at, created_at, referral_code
+     FROM users WHERE referral_code IS NOT NULL AND referral_code <> ''
+     ORDER BY LOWER(referral_code), created_at ASC`
+  );
+  return result.rows;
+}
+
 async function getAppState(key) {
   const result = await pool.query(`SELECT value FROM app_state WHERE key = $1`, [key]);
   return result.rows[0]?.value ?? null;
@@ -839,6 +850,7 @@ module.exports = {
   isReportDue,
   getLeakById,
   approveLeak,
+  getReferredUsers,
   getAppState,
   setAppState,
   countLeaksSince,

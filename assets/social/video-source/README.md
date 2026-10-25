@@ -11,11 +11,21 @@
 | `../sentryvo-demo3-vertical-1080x1920.mp4` | 9:16, 57 s | Video 3, "How to get protected" (buying a plan) |
 | `../sentryvo-demo3-landscape-1920x1080.mp4` | 16:9, 55 s | Video 3, landscape |
 | `../sentryvo-demo3-music-vertical.m4a`, `-landscape.m4a` | audio only | Video 3 soundtracks (one per version, the timings differ) |
+| `../sentryvo-demo4-vertical-1080x1920.mp4`, `-landscape-1920x1080.mp4` | 30 s | Video 4, brand film "Your content. Only where you put it." |
+| `../sentryvo-demo5-vertical-1080x1920.mp4`, `-landscape-1920x1080.mp4` | 32 s | Video 5, product tour "Inside SentryVo" |
+| `../sentryvo-demo4-music.m4a`, `../sentryvo-demo5-music.m4a` | audio only | Video 4 and 5 soundtracks |
 
 Video 1 (31 s, "Leaked today. Gone tomorrow."): `promo.html`, `promo-landscape.html`, `make_music.py`.
 Video 2 (26 s, the 72-hour case): `promo2.html` (open with `#land` for landscape), `make_music2.py`.
 Record video 2 with `node record.js "$PWD/promo2.html" frames frames 30 1080x1920` and
 `node record.js "$PWD/promo2.html#land" lframes frames 30 1920x1080`.
+
+Videos 4 and 5: `promo4.html` and `promo5.html` (open with `#land` for
+landscape, like video 2), music `make_music4.py` / `make_music5.py`, which
+share the instruments in `synth.py`. Record with
+`node record.js "$PWD/promo4.html" frames frames 30 1080x1920` and
+`node record.js "$PWD/promo4.html#land" lframes frames 30 1920x1080`.
+All names, links and numbers in them are made-up examples.
 
 Video 3 (the purchase walkthrough) is a recording of the real site pages, not
 an animation: `record-purchase.js` serves this repo at www.sentryvo.com inside

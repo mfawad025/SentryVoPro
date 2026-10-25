@@ -1,0 +1,245 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* SentryVo video 4: "Your content. Only where you put it." (30 s brand film).
+   Vertical 1080x1920 by default; open with #land for 1920x1080.
+   Every animation is timed from the start and driven by renderAt(ms). */
+:root{ --night:#0D0917; --panel:#1A1430; --panel2:#221A3D; --ink:#F1ECF9; --dim:rgba(241,236,249,.6); --line:rgba(241,236,249,.13);
+  --rose:#FF5A9D; --teal:#2FCFB4; --amber:#F2A33A; --head:'Unbounded',sans-serif; --body:'Instrument Sans',sans-serif; --mono:'Martian Mono',monospace;
+  --ease:cubic-bezier(.2,.7,.1,1); }
+*{ margin:0; box-sizing:border-box; }
+body{ width:1080px; height:1920px; overflow:hidden; background:var(--night); color:var(--ink); font-family:var(--body); position:relative; }
+body.land{ width:1920px; height:1080px; }
+
+/* backdrop: slow drifting light + film grain + vignette */
+.glow{ position:absolute; inset:-20%; background:
+  radial-gradient(40% 30% at 20% 20%, rgba(255,90,157,.20), transparent 70%),
+  radial-gradient(45% 35% at 85% 80%, rgba(47,207,180,.13), transparent 70%),
+  radial-gradient(30% 25% at 70% 15%, rgba(140,90,255,.12), transparent 70%);
+  animation:drift 30s linear both; }
+@keyframes drift{ from{ transform:translate(0,0) scale(1); } to{ transform:translate(-4%,3%) scale(1.12); } }
+.grain{ position:absolute; inset:-50%; opacity:.07; pointer-events:none; z-index:50;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain .5s steps(4) infinite; }
+@keyframes grain{ 0%{transform:translate(0,0)} 25%{transform:translate(-3%,2%)} 50%{transform:translate(2%,-3%)} 75%{transform:translate(-2%,-1%)} 100%{transform:translate(0,0)} }
+.vig{ position:absolute; inset:0; z-index:49; pointer-events:none; background:radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,.55)); }
+
+.a{ animation-fill-mode:both; animation-timing-function:var(--ease); }
+@keyframes up{ from{ opacity:0; transform:translateY(40px); filter:blur(8px); } to{ opacity:1; transform:none; filter:blur(0); } }
+@keyframes out{ to{ opacity:0; transform:translateY(-30px); filter:blur(8px); } }
+@keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes fadeOut{ to{ opacity:0; } }
+@keyframes pop{ 0%{ opacity:0; transform:scale(.6); } 60%{ opacity:1; transform:scale(1.06); } 100%{ opacity:1; transform:scale(1); } }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+/* top bar */
+.top{ position:absolute; top:84px; left:80px; right:80px; display:flex; align-items:center; justify-content:space-between; z-index:20;
+  animation:fadeIn .8s ease 3.6s both, fadeOut .6s ease 24.6s forwards; }
+.brand{ display:flex; align-items:center; gap:16px; font:700 40px/1 var(--head); letter-spacing:-.03em; }
+.brand svg{ width:58px; height:58px; }
+.sw{ transform-origin:32px 32px; animation:spin 3.6s linear infinite; }
+.tag{ font:500 19px/1 var(--mono); letter-spacing:.16em; color:var(--dim); }
+
+/* headlines: one slot, several lines swapping */
+.heads{ position:absolute; left:80px; right:80px; top:200px; height:400px; z-index:10; }
+.h{ position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; gap:22px; opacity:0;
+  animation:up .8s var(--ease) var(--in) both, out .6s var(--ease) var(--out) forwards; }
+.kick{ font:500 24px/1 var(--mono); letter-spacing:.18em; text-transform:uppercase; color:var(--rose); }
+.big{ font:800 88px/1.02 var(--head); letter-spacing:-.05em; text-wrap:balance; }
+.big em{ font-style:normal; color:var(--rose); }
+.big .t{ color:var(--teal); }
+
+/* scene 1: logo draw + statement */
+.s1{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:60px; text-align:center;
+  animation:fadeOut .6s ease 3.4s forwards; z-index:15; }
+.mark{ width:220px; height:220px; }
+.mark .ring{ stroke-dasharray:170; stroke-dashoffset:170; animation:draw 1.4s cubic-bezier(.6,0,.2,1) .2s forwards; }
+.mark .ring2{ stroke-dasharray:95; stroke-dashoffset:95; animation:draw 1.2s cubic-bezier(.6,0,.2,1) .5s forwards; }
+.mark .wedge, .mark .dot{ opacity:0; animation:fadeIn .5s ease 1.2s forwards; }
+@keyframes draw{ to{ stroke-dashoffset:0; } }
+.s1 .line{ font:800 110px/1 var(--head); letter-spacing:-.05em; opacity:0; animation:up .9s var(--ease) var(--in) both; }
+
+/* the grid of copies (scenes 2-4) */
+.stage{ position:absolute; left:80px; right:80px; top:700px; bottom:230px; z-index:5; overflow:hidden; border-radius:28px;
+  animation:fadeIn .6s ease 3.8s both, out .7s var(--ease) 18.1s forwards; }
+.grid{ position:absolute; inset:14px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,1fr); gap:22px; }
+.tile{ position:relative; border-radius:26px; overflow:hidden; background:var(--panel); border:2px solid var(--line); opacity:0;
+  animation:pop .55s cubic-bezier(.3,1.3,.5,1) var(--d) both; }
+.art{ position:absolute; inset:0; background:var(--g); filter:saturate(1.1);
+  animation:dull .6s ease var(--r) both; animation-play-state:running; }
+.art::before{ content:''; position:absolute; width:70%; aspect-ratio:1; left:15%; top:18%; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.35), transparent 65%); filter:blur(10px); }
+.art::after{ content:''; position:absolute; inset:0; backdrop-filter:blur(2px); background:linear-gradient(180deg, transparent 45%, rgba(13,9,23,.75)); }
+@keyframes dull{ from{ filter:saturate(1.1); opacity:1; } to{ filter:saturate(0) brightness(.45); opacity:.55; } }
+.play{ position:absolute; left:50%; top:42%; width:58px; height:58px; margin:-29px 0 0 -29px; border-radius:50%; background:rgba(13,9,23,.45); display:grid; place-items:center; }
+.play::after{ content:''; border-left:18px solid rgba(255,255,255,.9); border-top:11px solid transparent; border-bottom:11px solid transparent; margin-left:5px; }
+.where{ position:absolute; left:16px; right:16px; bottom:14px; font:500 17px/1.25 var(--mono); letter-spacing:.04em; color:rgba(255,255,255,.85); }
+.ringf{ position:absolute; inset:0; border-radius:24px; border:3px solid var(--rose); box-shadow:inset 0 0 40px rgba(255,90,157,.35); opacity:0;
+  animation:fadeIn .25s ease var(--f) both, fadeOut .4s ease var(--s) forwards; }
+.ringr{ position:absolute; inset:0; border-radius:24px; border:3px solid var(--teal); opacity:0; animation:fadeIn .3s ease var(--r) both; }
+.pill{ position:absolute; top:14px; left:14px; font:500 15px/1 var(--mono); letter-spacing:.08em; padding:9px 12px; border-radius:999px; opacity:0; }
+.pf{ background:var(--rose); color:#1A0B14; animation:pop .35s ease var(--f) both, fadeOut .25s ease var(--s) forwards; }
+.ps{ background:var(--amber); color:#1F1305; animation:pop .35s ease var(--s) both, fadeOut .25s ease var(--r) forwards; }
+.pr{ background:var(--teal); color:#062520; animation:pop .35s ease var(--r) both; }
+.check{ position:absolute; left:50%; top:42%; width:74px; height:74px; margin:-37px 0 0 -37px; border-radius:50%; background:var(--teal); display:grid; place-items:center; opacity:0;
+  animation:pop .45s cubic-bezier(.3,1.4,.5,1) var(--r) both; }
+.check svg{ width:40px; height:40px; color:#062520; }
+.orig .tile{ }
+/* radar sweep over the grid while it finds the copies */
+.radar{ position:absolute; inset:-30%; z-index:3; pointer-events:none; opacity:0;
+  background:conic-gradient(from 0deg, transparent 0deg, rgba(255,90,157,.0) 290deg, rgba(255,90,157,.32) 350deg, rgba(255,90,157,.5) 360deg);
+  animation:fadeIn .5s ease 8.7s both, spin 2.2s linear 8.7s 2 both, fadeOut .6s ease 12.6s forwards; mix-blend-mode:screen; }
+
+/* counters over the grid */
+.count{ position:absolute; left:80px; right:80px; top:626px; display:flex; gap:20px; z-index:12; font:500 22px/1 var(--mono); letter-spacing:.1em; }
+.count span{ padding:12px 18px; border-radius:999px; background:rgba(241,236,249,.06); border:1.5px solid var(--line); opacity:0; }
+.count b{ font-weight:500; }
+.c1{ color:var(--rose); animation:fadeIn .4s ease 9s both, out .5s var(--ease) 18.1s forwards; }
+.c2{ color:var(--teal); animation:fadeIn .4s ease 13.4s both, out .5s var(--ease) 18.1s forwards; }
+.note{ position:absolute; right:80px; bottom:200px; font:400 17px/1 var(--mono); letter-spacing:.08em; color:var(--dim); opacity:0; z-index:12;
+  animation:fadeIn .4s ease 13.4s both, fadeOut .4s ease 18.1s forwards; }
+
+/* scene 5: features */
+.feats{ position:absolute; left:80px; right:80px; top:640px; bottom:240px; display:grid; grid-template-columns:1fr; align-content:center; gap:24px; z-index:6; }
+.feat{ display:grid; grid-template-columns:120px 1fr; gap:30px; align-items:center; padding:34px 36px; border-radius:30px;
+  background:linear-gradient(135deg, rgba(241,236,249,.07), rgba(241,236,249,.02)); border:1.5px solid var(--line); opacity:0;
+  animation:feat .8s var(--ease) var(--in) both, out .5s var(--ease) 24.5s forwards; }
+@keyframes feat{ from{ opacity:0; transform:translateX(60px); filter:blur(6px); } to{ opacity:1; transform:none; filter:blur(0); } }
+.ico{ width:120px; height:120px; border-radius:30px; display:grid; place-items:center; background:color-mix(in srgb, var(--c) 16%, transparent); color:var(--c); }
+.ico svg{ width:62px; height:62px; }
+.feat b{ display:block; font:700 42px/1.1 var(--head); letter-spacing:-.03em; }
+.feat span{ display:block; margin-top:10px; font:400 27px/1.35 var(--body); color:var(--dim); }
+
+/* scene 6: end card */
+.end{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:40px; z-index:30; opacity:0;
+  animation:fadeIn .7s ease 25s both; }
+.end .logo{ position:relative; width:260px; height:260px; animation:pop .9s cubic-bezier(.3,1.3,.5,1) 25.1s both; }
+.end .logo svg{ width:100%; height:100%; }
+.pulse{ position:absolute; inset:-20px; border-radius:50%; border:3px solid var(--rose); opacity:0; animation:pulse 1.8s ease-out 25.6s 3; }
+@keyframes pulse{ 0%{ opacity:.8; transform:scale(.8); } 100%{ opacity:0; transform:scale(1.6); } }
+.end h2{ font:800 104px/1.02 var(--head); letter-spacing:-.05em; max-width:9ch; animation:up .9s var(--ease) 25.5s both; }
+.cta{ font:700 40px/1 var(--head); letter-spacing:-.02em; background:var(--rose); color:#1A0B14; padding:34px 54px; border-radius:999px;
+  box-shadow:0 20px 60px -10px rgba(255,90,157,.6); animation:pop .7s cubic-bezier(.3,1.3,.5,1) 26.4s both; }
+.url{ font:500 40px/1 var(--mono); letter-spacing:.06em; animation:up .7s var(--ease) 26.9s both; }
+.sub{ font:400 26px/1 var(--mono); color:var(--dim); letter-spacing:.08em; animation:up .7s var(--ease) 27.3s both; }
+
+/* ---------------- landscape ---------------- */
+.land .top{ top:56px; left:110px; right:110px; }
+.land .heads{ left:110px; right:auto; width:720px; top:170px; height:auto; bottom:170px; }
+.land .big{ font-size:68px; }
+.land .s1 .line{ font-size:120px; }
+.land .s1{ gap:46px; }
+.land .mark{ width:180px; height:180px; }
+.land .stage{ left:900px; right:110px; top:150px; bottom:130px; }
+.land .grid{ grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(3,1fr); gap:18px; }
+.land .where{ font-size:14px; left:12px; right:12px; bottom:10px; }
+.land .pill{ font-size:12px; padding:7px 10px; top:10px; left:10px; }
+.land .play{ width:46px; height:46px; margin:-23px 0 0 -23px; }
+.land .check{ width:60px; height:60px; margin:-30px 0 0 -30px; }
+.land .check svg{ width:32px; height:32px; }
+.land .count{ left:110px; right:auto; top:auto; bottom:180px; flex-direction:column; align-items:flex-start; gap:14px; }
+.land .note{ right:110px; bottom:84px; }
+.land .feats{ left:900px; right:110px; top:150px; bottom:130px; gap:20px; }
+.land .feat{ grid-template-columns:96px 1fr; padding:22px 28px; gap:26px; }
+.land .ico{ width:96px; height:96px; border-radius:24px; }
+.land .ico svg{ width:48px; height:48px; }
+.land .feat b{ font-size:32px; }
+.land .feat span{ font-size:21px; margin-top:6px; }
+.land .end{ gap:30px; }
+.land .end .logo{ width:190px; height:190px; }
+.land .end h2{ font-size:92px; max-width:none; }
+.land .cta{ font-size:34px; padding:28px 46px; }
+.land .url{ font-size:34px; }
+</style></head>
+<body>
+<div class="glow"></div>
+
+<!-- 1 · statement -->
+<section class="s1">
+  <svg class="mark" viewBox="0 0 64 64" fill="none">
+    <circle class="ring" cx="32" cy="32" r="26" stroke="#F1ECF9" stroke-width="4.5" transform="rotate(-90 32 32)"/>
+    <circle class="ring2" cx="32" cy="32" r="14.5" stroke="#F1ECF9" stroke-width="4" opacity=".35" transform="rotate(-90 32 32)"/>
+    <g class="wedge"><g class="sw"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g></g>
+    <circle class="dot" cx="46" cy="42" r="3.2" fill="#F1ECF9"/><circle class="dot" cx="32" cy="32" r="5" fill="#FF5A9D"/>
+  </svg>
+  <div>
+    <div class="line" style="--in:1.1s">You made it.</div>
+    <div class="line" style="--in:1.9s; color:var(--rose); margin-top:18px">You own it.</div>
+  </div>
+</section>
+
+<div class="top">
+  <div class="brand"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#F1ECF9" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#F1ECF9" stroke-width="4" opacity=".35"/><g class="sw"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="46" cy="42" r="3.2" fill="#F1ECF9"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg>SentryVo</div>
+  <div class="tag">LEAK PROTECTION FOR CREATORS</div>
+</div>
+
+<div class="heads">
+  <div class="h" style="--in:3.9s; --out:8.3s"><div class="kick">The problem</div><div class="big">One subscriber hits save.<br><em>Then it's everywhere.</em></div></div>
+  <div class="h" style="--in:8.7s; --out:12.6s"><div class="kick">Step 1 · Find</div><div class="big">SentryVo finds <em>every copy.</em></div></div>
+  <div class="h" style="--in:13s; --out:17.9s"><div class="kick">Step 2 · Remove</div><div class="big">Then takes them <span class="t">down.</span></div></div>
+  <div class="h" style="--in:18.6s; --out:24.5s"><div class="kick">Always on</div><div class="big">Built to <em>keep up.</em></div></div>
+</div>
+
+<div class="count"><span class="c1">COPIES FOUND <b id="nf">0</b></span><span class="c2">REMOVED <b id="nr">0</b></span></div>
+<div class="note">ILLUSTRATIVE EXAMPLE</div>
+
+<div class="stage"><div class="radar"></div><div class="grid" id="grid"></div></div>
+
+<div class="feats">
+  <div class="feat" style="--in:19.2s; --c:var(--rose)"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><b>Scans every 6 hours</b><span>Google, Google Images, Telegram, Reddit, X and known leak sites.</span></div></div>
+  <div class="feat" style="--in:20.4s; --c:#B58CFF"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg></div><div><b>Matches your photos</b><span>Reverse image search finds copies even without your name.</span></div></div>
+  <div class="feat" style="--in:21.6s; --c:var(--amber)"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/></svg></div><div><b>Automatic DMCA notices</b><span>Sent to the real host behind each site.</span></div></div>
+  <div class="feat" style="--in:22.8s; --c:var(--teal)"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></div><div><b>Reports and a live dashboard</b><span>See what was found and what came down.</span></div></div>
+</div>
+
+<section class="end">
+  <div class="logo"><div class="pulse"></div><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#F1ECF9" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#F1ECF9" stroke-width="4" opacity=".35"/><g class="sw"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="46" cy="42" r="3.2" fill="#F1ECF9"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg></div>
+  <h2>Protect what you create.</h2>
+  <div class="cta">Run your free scan</div>
+  <div class="url">www.sentryvo.com</div>
+  <div class="sub">Plans from $30 for your first month</div>
+</section>
+
+<div class="vig"></div><div class="grain"></div>
+
+<script>
+if (location.hash === '#land') document.body.classList.add('land');
+// Twelve copies of one piece of content, each on a different kind of site.
+const WHERE = ['Telegram channel', 'Forum thread', 'Tube site', 'Image host', 'Google Images', 'Reddit post',
+  'File locker', 'Leak site', 'Mirror site', 'Image board', 'Cloud folder', 'Fan forum'];
+const HUES = [330, 300, 15, 345, 280, 320, 25, 340, 290, 10, 310, 350];
+const REMOVED = 9;                      // 9 removed, 3 still waiting on the host
+const tick = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const order = [4, 7, 1, 10, 5, 0, 8, 3, 11, 6, 2, 9];   // pop-in order, scattered across the grid
+const grid = document.getElementById('grid');
+const T = { pop: [], found: [], sent: [], removed: [] };
+WHERE.forEach((w, i) => {
+  const k = order.indexOf(i);
+  const d = 4.5 + k * 0.28;             // copies appear 4.5 s - 7.6 s
+  const f = 9.2 + k * 0.26;             // found 9.2 s - 12.1 s
+  const s = 13.3 + k * 0.12;            // notice sent 13.3 s - 14.6 s
+  const r = k < REMOVED ? 14.8 + k * 0.32 : 99;  // removed 14.8 s - 17.4 s
+  T.found.push(f); if (r < 99) T.removed.push(r);
+  const h = HUES[i];
+  const g = `radial-gradient(60% 50% at 30% 30%, hsla(${h},90%,70%,.85), transparent 70%), radial-gradient(70% 60% at 80% 80%, hsla(${(h + 40) % 360},85%,55%,.8), transparent 70%), linear-gradient(135deg, hsl(${h},55%,28%), hsl(${(h + 30) % 360},60%,18%))`;
+  const el = document.createElement('div');
+  el.className = 'tile';
+  el.style.cssText = `--d:${d}s; --f:${f}s; --s:${s}s; --r:${r}s; --g:${g}`;
+  el.innerHTML = `<div class="art"></div>${i % 3 === 2 ? '<div class="play"></div>' : ''}<div class="where">${w}</div>
+    <div class="ringf"></div><div class="ringr"></div><span class="pill pf">FOUND</span><span class="pill ps">NOTICE SENT</span><span class="pill pr">REMOVED</span>
+    <div class="check">${tick}</div>`;
+  grid.appendChild(el);
+});
+window.CUES = { pop: WHERE.map((_, i) => 4.5 + order.indexOf(i) * 0.28).sort((a, b) => a - b), found: T.found.sort((a, b) => a - b), removed: T.removed.sort((a, b) => a - b) };
+const nf = document.getElementById('nf'), nr = document.getElementById('nr');
+let anims = [];
+window.renderAt = (ms) => {
+  if (!anims.length) anims = document.getAnimations();
+  for (const a of anims) { a.pause(); a.currentTime = ms; }
+  const t = ms / 1000;
+  nf.textContent = T.found.filter((x) => x <= t).length;
+  nr.textContent = T.removed.filter((x) => x <= t).length;
+};
+window.DURATION = 30;
+</script>
+</body></html>

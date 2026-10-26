@@ -71,5 +71,69 @@ const page = (w, h, body) => `<!doctype html><html><head><meta charset="utf-8">$
     </div>`;
   await shot('linkedin-cover-1128x191.png', 1128, 191, page(1128, 191, liBody));
   await shot('linkedin-cover-2256x382.png', 1128, 191, page(1128, 191, liBody), 2);
+
+  // ---------- Profile pictures for the other platforms ----------
+  // All of them crop to a circle, so the mark stays well inside it.
+  const prof = (size) => page(size, size, `<div style="position:absolute;inset:0;display:grid;place-items:center"><div style="width:${Math.round(size * .59)}px;height:${Math.round(size * .59)}px">${mark(C.ink, C.rose)}</div></div>`);
+  for (const [name, size] of [['youtube-profile-800.png', 800], ['instagram-profile-1080.png', 1080], ['tiktok-profile-1080.png', 1080],
+    ['telegram-avatar-640.png', 640], ['facebook-profile-720.png', 720]]) {
+    await shot(name, size, size, prof(size));
+  }
+
+  // ---------- YouTube banner 2560x1440 ----------
+  // TV shows all of it, desktop a 2560x423 strip, phones only the centre
+  // 1546x423 (x 507-2053, y 508-931): everything that matters sits there.
+  const ytBanner = page(2560, 1440, `
+    <div style="position:absolute;left:1290px;top:150px;opacity:.9">${radar(1140)}</div>
+    <div style="position:absolute;left:-260px;top:620px;opacity:.35">${radar(900, false)}</div>
+    <div style="position:absolute;left:560px;top:508px;width:1000px;height:423px;display:flex;flex-direction:column;justify-content:center;gap:26px">
+      <span class="label" style="font-size:20px">Leak detection &amp; DMCA takedowns for creators</span>
+      <div style="font-weight:800;font-size:92px;line-height:1;letter-spacing:-.045em">Leaked today.<br><span style="color:${C.rose}">Gone tomorrow.</span></div>
+      <span class="url" style="font-size:24px">www.sentryvo.com &nbsp;·&nbsp; Free scan</span>
+    </div>`);
+  await shot('youtube-banner-2560x1440.png', 2560, 1440, ytBanner);
+
+  // ---------- Facebook page cover 1640x624 ----------
+  // Desktop shows it all; phones crop the sides to roughly the middle
+  // 1100 px, so the text stays inside x 270-1370.
+  const fbCover = page(1640, 624, `
+    <div style="position:absolute;right:-180px;top:-260px;opacity:.85">${radar(1000, false)}</div>
+    <div style="position:absolute;left:290px;top:0;bottom:0;width:1060px;display:flex;flex-direction:column;justify-content:center;gap:22px">
+      <span class="label" style="font-size:17px">Leak detection &amp; DMCA takedowns for creators</span>
+      <div style="font-weight:800;font-size:78px;line-height:1.02;letter-spacing:-.045em">Leaked today.<br><span style="color:${C.rose}">Gone tomorrow.</span></div>
+      <span class="url" style="font-size:20px">www.sentryvo.com &nbsp;·&nbsp; Run your free scan</span>
+    </div>`);
+  await shot('facebook-cover-1640x624.png', 1640, 624, fbCover);
+
+  // ---------- Instagram story highlight covers 1080x1920 ----------
+  // Instagram shows only a circle from the middle, so one big icon in the centre.
+  const icon = {
+    how: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>',
+    pricing: '<path d="M20 12l-8 8-8-8V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
+    results: '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>',
+    faq: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><circle cx="12" cy="17.5" r=".6"/>',
+  };
+  for (const key of ['how', 'pricing', 'results', 'faq']) {
+    await shot(`instagram-highlight-${key}.png`, 1080, 1920, page(1080, 1920, `
+      <div style="position:absolute;left:0;right:0;top:0;bottom:0;display:grid;place-items:center">
+        <div style="width:420px;height:420px;border-radius:50%;background:rgba(255,90,157,.12);display:grid;place-items:center;border:4px solid rgba(255,90,157,.5)">
+          <svg viewBox="0 0 24 24" width="220" height="220" fill="none" stroke="${C.ink}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icon[key]}</svg>
+        </div>
+      </div>`));
+  }
+
+  // ---------- Telegram channel welcome post 1280x720 ----------
+  // Telegram channels have no cover image; pin this as the first post instead.
+  const tgWelcome = page(1280, 720, `
+    <div style="position:absolute;right:-120px;top:-80px">${radar(880)}</div>
+    <div style="position:absolute;left:90px;top:0;bottom:0;width:700px;display:flex;flex-direction:column;justify-content:center;gap:24px">
+      <div style="width:84px;height:84px">${mark(C.ink, C.rose)}</div>
+      <span class="label">Welcome to SentryVo</span>
+      <div style="font-weight:800;font-size:66px;line-height:1.02;letter-spacing:-.045em">Leaked today.<br><span style="color:${C.rose}">Gone tomorrow.</span></div>
+      <div style="font:400 22px/1.45 'Martian Mono',monospace;color:rgba(239,234,247,.75)">We find leaked creator content and<br>send the DMCA takedowns for you.</div>
+      <span class="url">www.sentryvo.com &nbsp;·&nbsp; Free scan</span>
+    </div>`);
+  await shot('telegram-welcome-1280x720.png', 1280, 720, tgWelcome);
+
   await b.close();
 })();

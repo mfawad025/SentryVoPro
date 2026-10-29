@@ -1,0 +1,458 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* SentryVo video 6: "Meet SentryVo" — an illustrated presenter in a
+   three-piece suit at his office desk explains SentryVo while the demo
+   plays on the wall screen beside him. No voice: he speaks in captions.
+   Vertical 1080x1920 by default; open with #land for 1920x1080.
+   CSS animations are stepped by renderAt(ms); the presenter (mouth, blinks,
+   head, arms) is posed by JS from the same time, so every frame is exact. */
+:root{ --ink:#F1ECF9; --dim:rgba(241,236,249,.62); --low:rgba(241,236,249,.4); --line:rgba(241,236,249,.13);
+  --rose:#FF5A9D; --teal:#2FCFB4; --amber:#F2A33A; --violet:#B58CFF;
+  --head:'Unbounded',sans-serif; --body:'Instrument Sans',sans-serif; --mono:'Martian Mono',monospace; --ease:cubic-bezier(.2,.7,.1,1); }
+*{ margin:0; box-sizing:border-box; }
+body{ width:1080px; height:1920px; overflow:hidden; color:var(--ink); font-family:var(--body); position:relative;
+  background:linear-gradient(180deg, #2B2243 0%, #221B37 55%, #1A1529 100%); }
+body.land{ width:1920px; height:1080px; }
+@keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes fadeOut{ to{ opacity:0; } }
+@keyframes up{ from{ opacity:0; transform:translateY(24px); } to{ opacity:1; transform:none; } }
+@keyframes pop{ 0%{ opacity:0; transform:scale(.7); } 60%{ opacity:1; transform:scale(1.05); } 100%{ opacity:1; transform:scale(1); } }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+@keyframes rise{ from{ transform:scaleY(0); } to{ transform:scaleY(1); } }
+
+/* ---------- office ---------- */
+.wallpanel{ position:absolute; inset:0; background:repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 2px, transparent 2px 160px); }
+.window{ position:absolute; border-radius:10px; overflow:hidden; border:14px solid #3A2F55; box-shadow:inset 0 0 0 4px #2A2240, 0 30px 60px -20px rgba(0,0,0,.5);
+  background:linear-gradient(180deg, #1B2546 0%, #33295A 60%, #57336A 100%); }
+.window::after{ content:''; position:absolute; inset:0; background:linear-gradient(90deg, transparent 49.6%, #3A2F55 49.6% 50.4%, transparent 50.4%), linear-gradient(115deg, rgba(255,255,255,.07), transparent 40%); }
+.window svg{ position:absolute; left:0; bottom:0; width:100%; height:75%; }
+.shelf{ position:absolute; }
+.shelf .board{ position:absolute; left:0; right:0; height:12px; background:#5B4433; border-radius:3px; box-shadow:0 8px 14px -6px rgba(0,0,0,.5); }
+.shelf .books{ position:absolute; left:14px; display:flex; align-items:flex-end; gap:5px; }
+.shelf .books i{ display:block; width:var(--w); height:var(--h); background:var(--c); border-radius:3px 3px 1px 1px; }
+.poster{ position:absolute; border-radius:12px; background:#151022; border:10px solid #4A3A2C; display:grid; place-items:center; box-shadow:0 20px 40px -16px rgba(0,0,0,.6); }
+.poster svg{ width:58%; height:58%; }
+.lamp{ position:absolute; border-radius:50%; background:radial-gradient(circle, rgba(255,196,120,.22), transparent 65%); pointer-events:none; }
+.sideboard{ position:absolute; background:linear-gradient(180deg, #5B4433 0 18px, #3E2F26 18px); border-radius:8px 8px 0 0; }
+.sideboard::before{ content:''; position:absolute; left:6%; right:6%; top:60px; bottom:30px; background:repeating-linear-gradient(90deg, transparent 0 calc(33.3% - 3px), rgba(0,0,0,.25) calc(33.3% - 3px) 33.3%); }
+
+/* ---------- wall screen ---------- */
+.monitor{ position:absolute; background:#0B0814; border:16px solid #0F0C18; border-radius:22px; box-shadow:0 0 0 3px #2E2647, 0 40px 80px -24px rgba(0,0,0,.7), 0 0 120px -30px rgba(255,90,157,.35); overflow:hidden; }
+.mount{ position:absolute; background:#151022; }
+.scr{ position:absolute; left:0; top:0; width:960px; height:550px; transform-origin:0 0; overflow:hidden;
+  background:radial-gradient(500px 300px at 85% 0%, rgba(255,90,157,.16), transparent 70%), radial-gradient(500px 300px at 0% 100%, rgba(47,207,180,.1), transparent 70%), #0E0A18; }
+.scene{ position:absolute; inset:0; padding:40px 46px; opacity:0; animation:fadeIn .45s ease var(--in) both, fadeOut .35s ease var(--out) forwards; }
+.sbar{ display:flex; justify-content:space-between; align-items:center; font:500 15px/1 var(--mono); letter-spacing:.14em; color:var(--dim); margin-bottom:26px; }
+.sbar .b{ display:flex; align-items:center; gap:10px; font:700 20px/1 var(--head); letter-spacing:-.02em; color:var(--ink); }
+.sbar .b svg{ width:30px; height:30px; }
+.sw{ transform-origin:32px 32px; animation:spin 3.6s linear infinite; }
+.stitle{ font:800 40px/1.05 var(--head); letter-spacing:-.04em; margin-bottom:22px; }
+.stitle em{ font-style:normal; color:var(--rose); }
+
+/* idle */
+.idle{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; text-align:center; }
+.idle svg{ width:130px; height:130px; }
+.idle b{ font:800 46px/1 var(--head); letter-spacing:-.04em; }
+.idle span{ font:500 15px/1 var(--mono); letter-spacing:.18em; color:var(--dim); }
+
+/* A: copies spreading */
+.tiles{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+.tile{ position:relative; height:150px; border-radius:16px; overflow:hidden; border:2px solid var(--line); opacity:0; animation:pop .45s cubic-bezier(.3,1.3,.5,1) var(--d) both; }
+.tile .art{ position:absolute; inset:0; background:var(--g); }
+.tile .art::after{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, transparent 40%, rgba(13,9,23,.8)); }
+.tile .w{ position:absolute; left:12px; bottom:10px; font:500 13px/1 var(--mono); color:rgba(255,255,255,.9); }
+.tile .f{ position:absolute; top:10px; left:10px; font:500 11px/1 var(--mono); letter-spacing:.08em; padding:6px 9px; border-radius:999px; background:var(--rose); color:#1A0B14; opacity:0; animation:pop .3s ease var(--f) both; }
+.tile .rf{ position:absolute; inset:0; border-radius:14px; border:3px solid var(--rose); opacity:0; animation:fadeIn .3s ease var(--f) both; }
+
+/* B: search */
+.searchwrap{ display:grid; grid-template-columns:330px 1fr; gap:40px; align-items:center; }
+.mini-radar{ position:relative; width:330px; height:330px; border-radius:50%; border:2px solid var(--line);
+  background:radial-gradient(circle, transparent 48%, rgba(241,236,249,.07) 49%, transparent 50%), radial-gradient(circle, transparent 23%, rgba(241,236,249,.07) 24%, transparent 25%); overflow:hidden; }
+.mini-radar .beam{ position:absolute; inset:0; border-radius:50%; background:conic-gradient(from 0deg, transparent 0deg 280deg, rgba(255,90,157,.5) 360deg); animation:spin 2.2s linear infinite; }
+.mini-radar .dot{ position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-11px; border-radius:50%; background:var(--rose); }
+.srcs{ display:grid; gap:12px; }
+.srcs div{ display:flex; justify-content:space-between; align-items:center; padding:13px 18px; border-radius:14px; background:rgba(241,236,249,.05); border:1.5px solid var(--line); font:600 21px/1 var(--body); opacity:0;
+  animation:up .4s var(--ease) var(--at) both, srcOn .3s ease var(--ok) forwards; }
+@keyframes srcOn{ to{ border-color:rgba(47,207,180,.6); background:rgba(47,207,180,.08); } }
+.srcs i{ font:500 13px/1 var(--mono); font-style:normal; letter-spacing:.08em; color:var(--teal); opacity:0; animation:fadeIn .3s ease var(--ok) both; }
+
+/* C: notice */
+.mail{ padding:26px 30px; border-radius:20px; background:rgba(241,236,249,.05); border:1.5px solid var(--line); }
+.mail .mh{ display:grid; gap:8px; padding-bottom:16px; border-bottom:1.5px solid var(--line); margin-bottom:16px; font:400 19px/1.3 var(--body); color:var(--dim); }
+.mail .mh b{ color:var(--ink); font-weight:600; }
+.mail code{ display:block; font:500 17px/1.6 var(--mono); }
+.mail .mf{ display:flex; justify-content:space-between; align-items:center; margin-top:18px; }
+.pills{ display:flex; gap:10px; }
+.pill{ font:500 14px/1 var(--mono); letter-spacing:.08em; padding:10px 14px; border-radius:999px; background:rgba(241,236,249,.06); color:var(--low); animation:pillOn .35s ease var(--at) forwards; }
+@keyframes pillOn{ to{ background:color-mix(in srgb, var(--c) 18%, transparent); color:var(--c); } }
+.sendbtn{ font:700 20px/1 var(--head); padding:16px 24px; border-radius:999px; background:var(--rose); color:#1A0B14; animation:sendOk .3s ease 16.6s forwards; }
+@keyframes sendOk{ to{ background:var(--teal); color:#062520; } }
+.sendbtn .t2{ display:none; }
+
+/* D: dashboard */
+.stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:16px; }
+.stat{ padding:16px 20px; border-radius:16px; background:rgba(241,236,249,.05); border:1.5px solid var(--line); }
+.stat small{ display:block; font:500 13px/1 var(--mono); letter-spacing:.1em; color:var(--low); text-transform:uppercase; }
+.stat b{ display:block; margin-top:10px; font:800 50px/1 var(--head); letter-spacing:-.04em; }
+.bars{ display:flex; align-items:flex-end; gap:12px; height:130px; padding:14px 18px; border-radius:16px; background:rgba(241,236,249,.04); border:1.5px solid var(--line); }
+.bars i{ flex:1; height:var(--h); border-radius:8px 8px 3px 3px; background:linear-gradient(180deg, var(--rose), rgba(255,90,157,.35)); transform-origin:bottom; transform:scaleY(0); animation:rise .6s var(--ease) var(--at) forwards; }
+.report{ display:flex; align-items:center; gap:16px; margin-top:14px; padding:14px 18px; border-radius:16px; background:#221A3D; border:1.5px solid rgba(47,207,180,.5); opacity:0; animation:pop .5s ease 23.4s both; }
+.report b{ font:700 19px/1.2 var(--head); } .report span{ font:400 16px/1.2 var(--body); color:var(--dim); }
+
+/* E: call to action */
+.ctas{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; text-align:center; }
+.ctas svg{ width:110px; height:110px; }
+.ctas h3{ font:800 52px/1.05 var(--head); letter-spacing:-.04em; }
+.ctas .btn{ font:700 26px/1 var(--head); padding:20px 34px; border-radius:999px; background:var(--rose); color:#1A0B14; box-shadow:0 14px 40px -10px rgba(255,90,157,.7); opacity:0; animation:pop .5s ease 26.6s both; }
+.ctas .u{ font:500 24px/1 var(--mono); letter-spacing:.06em; }
+
+/* ---------- presenter + captions ---------- */
+#man{ position:absolute; }
+.cap{ position:absolute; z-index:20; display:flex; align-items:flex-start; gap:18px; padding:22px 28px; border-radius:24px; background:rgba(14,10,24,.86); border:1.5px solid var(--line);
+  box-shadow:0 20px 50px -20px rgba(0,0,0,.7); backdrop-filter:blur(6px); opacity:0; animation:fadeIn .3s ease .5s both, fadeOut .4s ease 30.8s forwards; }
+.cap .who{ flex:none; font:500 15px/1 var(--mono); letter-spacing:.14em; color:var(--rose); padding-top:9px; }
+.cap .lines{ position:relative; flex:1; min-height:2.6em; font:600 34px/1.3 var(--body); }
+.cap .l{ position:absolute; inset:0; opacity:0; animation:up .35s var(--ease) var(--in) both, fadeOut .25s ease var(--out) forwards; }
+.cap .l em{ font-style:normal; color:var(--rose); }
+.brandtag{ position:absolute; z-index:20; display:flex; align-items:center; gap:14px; font:700 30px/1 var(--head); letter-spacing:-.03em; }
+.brandtag svg{ width:44px; height:44px; }
+.brandtag span{ font:500 15px/1 var(--mono); letter-spacing:.16em; color:var(--dim); margin-left:10px; }
+
+/* ---------- end card ---------- */
+.end{ position:absolute; inset:0; z-index:40; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:36px; text-align:center;
+  background:radial-gradient(60% 45% at 50% 45%, rgba(255,90,157,.2), transparent 70%), #0D0917; opacity:0; animation:fadeIn .8s ease 31s both; }
+.end svg{ width:220px; height:220px; animation:pop .8s cubic-bezier(.3,1.3,.5,1) 31.2s both; }
+.end h2{ font:800 96px/1.03 var(--head); letter-spacing:-.05em; max-width:10ch; animation:up .8s var(--ease) 31.6s both; }
+.end .btn{ font:700 38px/1 var(--head); padding:30px 50px; border-radius:999px; background:var(--rose); color:#1A0B14; animation:pop .6s ease 32.3s both; }
+.end .u{ font:500 38px/1 var(--mono); letter-spacing:.06em; animation:up .6s ease 32.7s both; }
+.end small{ font:400 24px/1 var(--mono); color:var(--dim); animation:up .6s ease 33s both; }
+
+/* ---------- vertical positions ---------- */
+.window{ left:110px; top:820px; width:860px; height:460px; }
+.shelf.s1{ display:none; }
+.poster{ display:none; }
+.lamp{ left:600px; top:700px; width:900px; height:900px; }
+.sideboard{ display:none; }
+.monitor{ left:56px; top:200px; width:968px; height:558px; }
+.mount{ left:500px; top:150px; width:80px; height:60px; border-radius:6px; }
+#man{ left:-30px; top:930px; width:1140px; }
+.cap{ left:56px; right:56px; top:1748px; }
+.brandtag{ left:60px; top:80px; }
+
+/* ---------- landscape positions ---------- */
+.land .window{ left:150px; top:120px; width:640px; height:420px; }
+.land .shelf.s1{ display:block; left:1080px; top:745px; width:380px; height:20px; }
+.land .poster{ display:grid; left:860px; top:110px; width:120px; height:150px; }
+.land .lamp{ left:-150px; top:-100px; width:1100px; height:1100px; }
+.land .sideboard{ display:block; left:1000px; top:760px; width:860px; height:320px; }
+.land .monitor{ left:1010px; top:130px; width:850px; height:494px; }
+.land .mount{ left:1395px; top:620px; width:80px; height:20px; border-radius:0 0 6px 6px; }
+.land #man{ left:30px; top:196px; width:960px; }
+.land .cap{ left:1010px; right:60px; top:auto; bottom:56px; padding:20px 24px; }
+.land .cap .lines{ font-size:26px; }
+.land .cap .who{ font-size:13px; padding-top:7px; }
+.land .brandtag{ left:auto; right:60px; top:54px; font-size:24px; }
+.land .brandtag svg{ width:36px; height:36px; }
+.land .end h2{ max-width:none; font-size:88px; }
+</style></head>
+<body>
+<div class="wallpanel"></div>
+<div class="lamp"></div>
+<div class="window"><svg id="city" viewBox="0 0 640 300" preserveAspectRatio="none"></svg></div>
+<div class="poster"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#F1ECF9" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#F1ECF9" stroke-width="4" opacity=".35"/><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg></div>
+<div class="sideboard"></div>
+<div class="shelf s1"><div class="books" style="bottom:12px">
+  <i style="--w:26px;--h:96px;--c:#6B4FD8"></i><i style="--w:20px;--h:84px;--c:#D82F74"></i><i style="--w:30px;--h:104px;--c:#2B2F4A"></i><i style="--w:22px;--h:90px;--c:#0B8F7C"></i><i style="--w:28px;--h:78px;--c:#C77A12"></i><i style="--w:24px;--h:98px;--c:#3A3F5E"></i>
+  <svg width="120" height="150" viewBox="0 0 120 150" style="margin-left:40px"><path d="M30 110h60l-8 40H38z" fill="#C9A27E"/><g fill="#2F9E6E"><ellipse cx="60" cy="70" rx="12" ry="44"/><ellipse cx="38" cy="82" rx="10" ry="34" transform="rotate(-25 38 82)"/><ellipse cx="82" cy="82" rx="10" ry="34" transform="rotate(25 82 82)"/></g></svg>
+</div><div class="board" style="bottom:0"></div></div>
+
+<div class="mount"></div>
+<div class="monitor"><div class="scr" id="scr">
+  <!-- idle -->
+  <div class="scene idle" style="--in:0s; --out:4.2s; opacity:1">
+    <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#F1ECF9" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#F1ECF9" stroke-width="4" opacity=".35"/><g class="sw"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="46" cy="42" r="3.2" fill="#F1ECF9"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg>
+    <b>SentryVo</b><span>LEAK PROTECTION FOR CREATORS</span>
+  </div>
+  <!-- A: leak spreading -->
+  <div class="scene" style="--in:4.3s; --out:8.9s">
+    <div class="sbar"><span class="b">⚠ Leak alert</span><span>CASE: LUNADEMO · EXAMPLE</span></div>
+    <div class="stitle">One leak, <em>many copies.</em></div>
+    <div class="tiles" id="tiles"></div>
+  </div>
+  <!-- B: search -->
+  <div class="scene" style="--in:9.1s; --out:14.5s">
+    <div class="sbar"><span class="b">Scanning</span><span>EVERY 6 HOURS</span></div>
+    <div class="searchwrap"><div class="mini-radar"><div class="beam"></div><div class="dot"></div></div>
+      <div class="srcs">
+        <div style="--at:9.5s; --ok:10.3s">Google<i>✓ DONE</i></div>
+        <div style="--at:9.7s; --ok:10.8s">Google Images<i>✓ DONE</i></div>
+        <div style="--at:9.9s; --ok:11.3s">Reverse image search<i>✓ DONE</i></div>
+        <div style="--at:10.1s; --ok:11.8s">Telegram<i>✓ DONE</i></div>
+        <div style="--at:10.3s; --ok:12.3s">Reddit &amp; X<i>✓ DONE</i></div>
+        <div style="--at:10.5s; --ok:12.8s">Known leak sites<i>✓ DONE</i></div>
+      </div></div>
+  </div>
+  <!-- C: takedown -->
+  <div class="scene" style="--in:14.7s; --out:20.1s">
+    <div class="sbar"><span class="b">DMCA notice</span><span>AUTOMATIC</span></div>
+    <div class="mail">
+      <div class="mh"><div>To: <b>abuse@hosting-provider.example</b></div><div>Re: <b>Copyright infringement, 3 links</b></div></div>
+      <code>leaksite.example/lunademo-pack</code><code>leaksite.example/v/88213</code><code>leaksite.example/g/lunademo</code>
+      <div class="mf"><div class="pills"><span class="pill" style="--c:var(--amber); --at:16.8s">SENT</span><span class="pill" style="--c:var(--teal); --at:18.8s">REMOVED</span></div><span class="sendbtn" id="sendbtn">Send notice</span></div>
+    </div>
+  </div>
+  <!-- D: dashboard -->
+  <div class="scene" style="--in:20.3s; --out:25.5s">
+    <div class="sbar"><span class="b">Dashboard</span><span>LAST 7 DAYS · EXAMPLE</span></div>
+    <div class="stats"><div class="stat"><small>Leaks found</small><b id="n1">0</b></div><div class="stat"><small>Notices sent</small><b id="n2">0</b></div><div class="stat"><small>Removed</small><b id="n3" style="color:var(--teal)">0</b></div></div>
+    <div class="bars"><i style="--h:35%; --at:21.2s"></i><i style="--h:60%; --at:21.3s"></i><i style="--h:45%; --at:21.4s"></i><i style="--h:80%; --at:21.5s"></i><i style="--h:55%; --at:21.6s"></i><i style="--h:30%; --at:21.7s"></i><i style="--h:20%; --at:21.8s"></i></div>
+    <div class="report"><span style="font-size:26px">✉</span><div><b>Your SentryVo report</b><br><span>With a spreadsheet of every link</span></div></div>
+  </div>
+  <!-- E: call to action -->
+  <div class="scene ctas" style="--in:25.7s; --out:99s">
+    <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#F1ECF9" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#F1ECF9" stroke-width="4" opacity=".35"/><g class="sw"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="46" cy="42" r="3.2" fill="#F1ECF9"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg>
+    <h3>Is your content leaked?</h3><div class="btn">Run your free scan</div><div class="u">www.sentryvo.com</div>
+  </div>
+</div></div>
+
+<svg id="man" viewBox="0 0 900 800"></svg>
+
+<div class="brandtag"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#F1ECF9" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#F1ECF9" stroke-width="4" opacity=".35"/><g class="sw"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg>SentryVo<span>PRODUCT DEMO</span></div>
+
+<div class="cap"><div class="who">SENTRYVO</div><div class="lines" id="lines"></div></div>
+
+<section class="end">
+  <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#F1ECF9" stroke-width="4.5"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="#F1ECF9" stroke-width="4" opacity=".35"/><g class="sw"><path d="M32 32 L32 6 A26 26 0 0 1 54.5 19 Z" fill="#FF5A9D"/></g><circle cx="46" cy="42" r="3.2" fill="#F1ECF9"/><circle cx="32" cy="32" r="5" fill="#FF5A9D"/></svg>
+  <h2>Protect what you create.</h2>
+  <div class="btn">Run your free scan</div>
+  <div class="u">www.sentryvo.com</div>
+  <small>Plans from $30 for your first month</small>
+</section>
+
+<script>
+const LAND = location.hash === '#land';
+if (LAND) document.body.classList.add('land');
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+// ---------- what he says (captions) ----------
+const LINES = [
+  [0.6, 3.9, 'Hello! Let me show you how <em>SentryVo</em> protects your content.'],
+  [4.4, 8.7, 'When content leaks, copies spread to forums, Telegram and tube sites within hours.'],
+  [9.2, 14.3, 'SentryVo searches for your stage names as often as <em>every 6 hours</em>.'],
+  [14.8, 19.9, 'Every match is checked, then a <em>DMCA takedown notice</em> goes to the host.'],
+  [20.4, 25.3, 'You follow everything on your dashboard, with regular reports by email.'],
+  [25.8, 30.6, 'Start with a <em>free scan</em> at sentryvo.com. It takes a minute.'],
+];
+const linesBox = document.getElementById('lines');
+LINES.forEach(([a, b, text]) => { const d = document.createElement('div'); d.className = 'l'; d.style.cssText = `--in:${a}s; --out:${b + 0.3}s`; d.innerHTML = text; linesBox.appendChild(d); });
+
+// ---------- city skyline in the window (fixed pattern) ----------
+(() => {
+  const city = document.getElementById('city');
+  let x = 0, seed = 7;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  while (x < 640) {
+    const w = 40 + rnd() * 60, h = 90 + rnd() * 190;
+    el('rect', { x, y: 300 - h, width: w - 4, height: h, fill: rnd() > .5 ? '#1A1530' : '#221B3B' }, city);
+    for (let wy = 300 - h + 12; wy < 290; wy += 18) for (let wx = x + 8; wx < x + w - 12; wx += 14) {
+      if (rnd() > .62) el('rect', { x: wx, y: wy, width: 6, height: 8, fill: rnd() > .3 ? '#F7C873' : '#9FD6FF', opacity: .55 + rnd() * .4 }, city);
+    }
+    x += w;
+  }
+})();
+
+// ---------- screen scene A tiles ----------
+(() => {
+  const where = ['Telegram', 'Forum', 'Tube site', 'Image host', 'Leak site', 'Mirror', 'File locker', 'Image board'];
+  const tiles = document.getElementById('tiles');
+  where.forEach((w, i) => {
+    const h = [330, 300, 15, 345, 280, 320, 25, 340][i];
+    const g = `radial-gradient(60% 50% at 30% 30%, hsla(${h},90%,70%,.85), transparent 70%), radial-gradient(70% 60% at 80% 80%, hsla(${(h + 40) % 360},85%,55%,.8), transparent 70%), linear-gradient(135deg, hsl(${h},55%,28%), hsl(${(h + 30) % 360},60%,18%))`;
+    const t = document.createElement('div'); t.className = 'tile';
+    t.style.cssText = `--d:${4.8 + i * 0.32}s; --f:${6.9 + i * 0.2}s; --g:${g}`;
+    t.innerHTML = '<div class="art"></div><div class="rf"></div><span class="f">FOUND</span><span class="w">' + w + '</span>';
+    tiles.appendChild(t);
+  });
+})();
+
+// ---------- the presenter (drawn once, posed every frame) ----------
+const C = { suit: '#2E3352', suitDark: '#22263F', lapel: '#252A45', vest: '#3F4566', shirt: '#F4F1EA', tie: '#D82F74', tieDark: '#B8215F',
+  skin: '#D9A07A', skinDark: '#C58A64', hair: '#2A1E19', chair: '#17131F', chairHi: '#231D30' };
+const man = document.getElementById('man');
+// chair
+el('rect', { x: 290, y: 205, width: 320, height: 480, rx: 70, fill: C.chair }, man);
+el('rect', { x: 310, y: 225, width: 280, height: 440, rx: 56, fill: C.chairHi, opacity: .5 }, man);
+const body = el('g', {}, man);
+// torso: jacket
+el('path', { d: 'M318 392 Q322 352 362 344 L418 326 L482 326 L538 344 Q578 352 582 392 L598 660 L302 660 Z', fill: C.suit }, body);
+// waistcoat in the jacket's opening
+el('path', { d: 'M412 330 L488 330 L478 600 L450 612 L422 600 Z', fill: C.vest }, body);
+el('path', { d: 'M422 600 L450 612 L478 600 L474 640 L426 640 Z', fill: C.vest }, body);
+// shirt + tie
+el('path', { d: 'M424 328 L476 328 L450 420 Z', fill: C.shirt }, body);
+el('path', { d: 'M441 334 L459 334 L462 352 L438 352 Z', fill: C.tieDark }, body);
+el('path', { d: 'M439 352 L461 352 L468 420 L450 436 L432 420 Z', fill: C.tie }, body);
+// waistcoat V over the tie, and its buttons
+el('path', { d: 'M424 328 L450 420 L412 420 L412 330 Z', fill: C.vest }, body);
+el('path', { d: 'M476 328 L450 420 L488 420 L488 330 Z', fill: C.vest }, body);
+[460, 500, 540, 580].forEach((y) => el('circle', { cx: 450, cy: y, r: 5.5, fill: '#1B1F33' }, body));
+// lapels
+el('path', { d: 'M412 330 L432 334 L428 380 L452 560 L404 392 Z', fill: C.lapel }, body);
+el('path', { d: 'M488 330 L468 334 L472 380 L448 560 L496 392 Z', fill: C.lapel }, body);
+el('path', { d: 'M404 392 L452 560 L412 660 L330 660 Z', fill: C.suit, opacity: 0 }, body);
+// pocket square + jacket pocket
+el('path', { d: 'M512 418 L548 412 L546 424 L512 428 Z', fill: C.suitDark }, body);
+el('path', { d: 'M518 416 L528 402 L536 414 Z', fill: '#FF8CB8' }, body);
+// neck + collar
+el('rect', { x: 430, y: 280, width: 40, height: 56, rx: 12, fill: C.skinDark }, body);
+el('path', { d: 'M424 326 L450 352 L440 322 Z', fill: C.shirt }, body);
+el('path', { d: 'M476 326 L450 352 L460 322 Z', fill: C.shirt }, body);
+// head (a group so it can tilt)
+const head = el('g', {}, body);
+el('ellipse', { cx: 388, cy: 236, rx: 12, ry: 18, fill: C.skinDark }, head);
+el('ellipse', { cx: 512, cy: 236, rx: 12, ry: 18, fill: C.skinDark }, head);
+el('ellipse', { cx: 450, cy: 226, rx: 62, ry: 76, fill: C.skin }, head);
+el('path', { d: 'M388 214 Q384 150 446 144 Q516 140 514 214 Q506 186 470 180 Q430 188 404 178 Q394 196 388 214 Z', fill: C.hair }, head);
+el('path', { d: 'M404 178 Q440 160 470 180', stroke: '#3A2A22', 'stroke-width': 3, fill: 'none' }, head);
+const browL = el('path', { d: 'M414 206 Q426 199 438 204', stroke: C.hair, 'stroke-width': 5, 'stroke-linecap': 'round', fill: 'none' }, head);
+const browR = el('path', { d: 'M462 204 Q474 199 486 206', stroke: C.hair, 'stroke-width': 5, 'stroke-linecap': 'round', fill: 'none' }, head);
+const eyes = el('g', {}, head);
+const eyeL = el('ellipse', { cx: 428, cy: 226, rx: 6, ry: 7, fill: '#1A1426' }, eyes);
+const eyeR = el('ellipse', { cx: 472, cy: 226, rx: 6, ry: 7, fill: '#1A1426' }, eyes);
+el('path', { d: 'M450 232 Q445 252 446 258 Q450 262 456 258', stroke: C.skinDark, 'stroke-width': 3.5, fill: 'none', 'stroke-linecap': 'round' }, head);
+el('ellipse', { cx: 416, cy: 252, rx: 12, ry: 6, fill: '#E88A8A', opacity: .25 }, head);
+el('ellipse', { cx: 484, cy: 252, rx: 12, ry: 6, fill: '#E88A8A', opacity: .25 }, head);
+const mouthClosed = el('path', { d: 'M434 276 Q450 286 466 276', stroke: '#7A3B32', 'stroke-width': 4, fill: 'none', 'stroke-linecap': 'round' }, head);
+const mouthOpen = el('g', {}, head);
+const mouthShape = el('ellipse', { cx: 450, cy: 278, rx: 15, ry: 1, fill: '#5A2026' }, mouthOpen);
+const teeth = el('rect', { x: 439, y: 272, width: 22, height: 4, rx: 2, fill: '#FFF' }, mouthOpen);
+
+// arms: shoulder -> elbow -> wrist, drawn as thick rounded strokes
+function makeArm(parent) {
+  const g = el('g', {}, parent);
+  const upper = el('line', { stroke: C.suit, 'stroke-width': 62, 'stroke-linecap': 'round' }, g);
+  const fore = el('line', { stroke: C.suit, 'stroke-width': 52, 'stroke-linecap': 'round' }, g);
+  const cuff = el('line', { stroke: C.shirt, 'stroke-width': 40, 'stroke-linecap': 'round' }, g);
+  const finger = el('line', { stroke: C.skin, 'stroke-width': 12, 'stroke-linecap': 'round' }, g);
+  const thumb = el('line', { stroke: C.skin, 'stroke-width': 11, 'stroke-linecap': 'round' }, g);
+  const hand = el('circle', { r: 23, fill: C.skin }, g);
+  return { g, upper, fore, cuff, finger, thumb, hand };
+}
+const armL = makeArm(man);   // viewer's left
+const armR = makeArm(man);   // viewer's right (towards the screen)
+// desk in front
+el('rect', { x: 0, y: 628, width: 900, height: 24, rx: 6, fill: '#6A4E3A' }, man);
+el('rect', { x: 0, y: 650, width: 900, height: 160, fill: '#3E2E25' }, man);
+el('rect', { x: 0, y: 650, width: 900, height: 8, fill: '#000', opacity: .25 }, man);
+// laptop (back towards us) + mug + nameplate
+el('path', { d: 'M96 628 L112 500 L292 500 L276 628 Z', fill: '#C9CDD8' }, man);
+el('path', { d: 'M100 628 L114 508 L288 508 L274 628 Z', fill: '#B4B9C6' }, man);
+const lapLogo = el('g', { transform: 'translate(194 562)' }, man);
+el('circle', { r: 20, fill: 'none', stroke: '#fff', 'stroke-width': 4, opacity: .9 }, lapLogo);
+el('circle', { r: 5, fill: '#FF5A9D' }, lapLogo);
+el('rect', { x: 80, y: 622, width: 220, height: 10, rx: 4, fill: '#A9AEBC' }, man);
+el('rect', { x: 700, y: 560, width: 54, height: 66, rx: 8, fill: '#F1ECF9' }, man);
+el('path', { d: 'M754 576 q22 4 18 22 q-4 14 -18 12', stroke: '#F1ECF9', 'stroke-width': 8, fill: 'none' }, man);
+el('rect', { x: 700, y: 572, width: 54, height: 10, fill: '#D82F74' }, man);
+el('path', { d: 'M360 700 L540 700 L552 760 L348 760 Z', fill: '#2A1F1A' }, man);
+el('text', { x: 450, y: 740, 'text-anchor': 'middle', fill: '#E7C9A0', 'font-family': 'Martian Mono', 'font-size': 20, 'letter-spacing': 4 }, man).textContent = 'SENTRYVO';
+
+// ---------- poses ----------
+// Angles in degrees, SVG style (0 = right, 90 = down). a1 = upper arm, a2 = forearm.
+const SH_L = [326, 386], SH_R = [574, 386], L1 = 150, L2 = 132;
+const P = {
+  restL: { a1: 92, a2: 28, f: 0 }, restR: { a1: 88, a2: 152, f: 0 },
+  waveL: { a1: 150, a2: -95, f: 0 },
+  explainL: { a1: 118, a2: -38, f: 0 },
+  pointR: LAND ? { a1: -14, a2: -20, f: 1 } : { a1: -40, a2: -62, f: 1 },
+  openL: { a1: 125, a2: 205, f: 0 }, openR: { a1: 55, a2: -25, f: 0 },
+};
+// keyframes: [time, pose] — the arm eases from one pose to the next over 0.5 s
+const KF_L = [[0, 'restL'], [0.5, 'waveL'], [2.9, 'restL'], [15.1, 'explainL'], [17.6, 'restL'], [26.1, 'openL'], [29.8, 'restL']];
+const KF_R = [[0, 'restR'], [4.7, 'pointR'], [8.0, 'restR'], [9.5, 'pointR'], [11.8, 'restR'], [18.0, 'pointR'], [19.7, 'restR'], [20.7, 'pointR'], [22.9, 'restR'], [26.1, 'openR'], [29.8, 'restR']];
+const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+function poseAt(kf, t) {
+  let prev = P[kf[0][1]], cur = prev, k = 1;
+  for (let i = 0; i < kf.length; i++) {
+    if (t < kf[i][0]) break;
+    prev = i ? P[kf[i - 1][1]] : P[kf[0][1]];
+    cur = P[kf[i][1]];
+    k = Math.min(1, (t - kf[i][0]) / 0.5);
+  }
+  const e = ease(k);
+  return { a1: prev.a1 + (cur.a1 - prev.a1) * e, a2: prev.a2 + (cur.a2 - prev.a2) * e, f: prev.f + (cur.f - prev.f) * e, moving: k < 1 };
+}
+const rad = (d) => d * Math.PI / 180;
+function setArm(arm, sh, p, wave) {
+  const a2 = p.a2 + wave;
+  const e = [sh[0] + L1 * Math.cos(rad(p.a1)), sh[1] + L1 * Math.sin(rad(p.a1))];
+  const h = [e[0] + L2 * Math.cos(rad(a2)), e[1] + L2 * Math.sin(rad(a2))];
+  const dx = Math.cos(rad(a2)), dy = Math.sin(rad(a2));
+  const w = [h[0] - dx * 20, h[1] - dy * 20];
+  const set = (ln, a, b) => { ln.setAttribute('x1', a[0]); ln.setAttribute('y1', a[1]); ln.setAttribute('x2', b[0]); ln.setAttribute('y2', b[1]); };
+  set(arm.upper, sh, e); set(arm.fore, e, w); set(arm.cuff, [w[0] - dx * 10, w[1] - dy * 10], w);
+  arm.hand.setAttribute('cx', h[0]); arm.hand.setAttribute('cy', h[1]);
+  set(arm.finger, h, [h[0] + dx * 44 * p.f, h[1] + dy * 44 * p.f]); arm.finger.style.opacity = p.f > .05 ? 1 : 0;
+  const tx = Math.cos(rad(a2 - 70)), ty = Math.sin(rad(a2 - 70));
+  set(arm.thumb, h, [h[0] + tx * 24, h[1] + ty * 24]);
+}
+
+const BLINKS = [1.9, 5.6, 9.0, 12.6, 16.3, 19.1, 23.0, 27.2, 30.1, 33.5];
+function talkAt(t) {
+  for (const [a, b] of LINES) {
+    if (t >= a && t <= b) {
+      const edge = Math.min(1, (t - a) / 0.15, (b - t) / 0.15);
+      const syll = 0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 4.7);
+      const phrase = Math.sin(t * 2 * Math.PI * 1.3 + a) > -0.75 ? 1 : 0.15;
+      return Math.max(0, edge) * phrase * (0.25 + 0.75 * syll * (0.7 + 0.3 * Math.sin(t * 2 * Math.PI * 2.1)));
+    }
+  }
+  return 0;
+}
+
+// dashboard counters
+const counts = [['n1', 12], ['n2', 9], ['n3', 7]].map(([id, n]) => [document.getElementById(id), n]);
+const scr = document.getElementById('scr');
+function fitScreen() {
+  const mon = document.querySelector('.monitor');
+  const s = (mon.clientWidth) / 960;
+  scr.style.transform = `scale(${s})`;
+}
+fitScreen();
+
+let anims = [];
+window.renderAt = (ms) => {
+  if (!anims.length) anims = document.getAnimations();
+  for (const a of anims) { a.pause(); a.currentTime = ms; }
+  const t = ms / 1000;
+  // breathing + gentle sway
+  body.setAttribute('transform', `translate(0 ${Math.sin(t * 2 * Math.PI / 4.2) * 2.2})`);
+  const pr = poseAt(KF_R, t), pl = poseAt(KF_L, t);
+  // looks towards the screen while pointing
+  const look = pr.f;
+  const tilt = Math.sin(t * 2 * Math.PI / 5.3) * 1.6 + (talkAt(t) > 0 ? Math.sin(t * 2 * Math.PI * 0.9) * 1.2 : 0) + look * (LAND ? 5 : 3);
+  head.setAttribute('transform', `rotate(${tilt} 450 300) translate(${look * (LAND ? 6 : 3)} ${look * (LAND ? 0 : -3)})`);
+  const blink = BLINKS.some((b) => t >= b && t < b + 0.13);
+  const ex = look * (LAND ? 4 : 2.5), ey = look * (LAND ? -1 : -3);
+  for (const [eye, cx] of [[eyeL, 428], [eyeR, 472]]) { eye.setAttribute('ry', blink ? 0.8 : 7); eye.setAttribute('cx', cx + ex); eye.setAttribute('cy', 226 + ey); }
+  const lift = talkAt(t) > 0.6 ? -2 : 0;
+  browL.setAttribute('transform', `translate(0 ${lift})`); browR.setAttribute('transform', `translate(0 ${lift})`);
+  const m = talkAt(t);
+  mouthShape.setAttribute('ry', 2 + m * 11); mouthShape.setAttribute('rx', 15 - m * 2);
+  teeth.style.opacity = m > 0.25 ? 1 : 0;
+  mouthOpen.style.opacity = m > 0.04 ? 1 : 0; mouthClosed.style.opacity = m > 0.04 ? 0 : 1;
+  // arms; the left hand waves while saying hello
+  const wave = t > 1.0 && t < 2.7 ? Math.sin((t - 1.0) * 2 * Math.PI * 1.6) * 14 : 0;
+  setArm(armL, SH_L, pl, wave);
+  setArm(armR, SH_R, pr, pr.f > 0.9 ? Math.sin(t * 2 * Math.PI * 0.8) * 2 : 0);
+  // numbers on the dashboard
+  const k = Math.min(1, Math.max(0, (t - 20.9) / 1.5)), e = 1 - Math.pow(1 - k, 3);
+  counts.forEach(([node, n]) => { node.textContent = Math.round(n * e); });
+  document.getElementById('sendbtn').textContent = t >= 16.6 ? '✓ Sent' : 'Send notice';
+};
+window.DURATION = 36;
+</script>
+</body></html>

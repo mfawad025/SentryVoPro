@@ -14,7 +14,8 @@
 | `../sentryvo-demo4-vertical-1080x1920.mp4`, `-landscape-1920x1080.mp4` | 30 s | Video 4, brand film "Your content. Only where you put it." |
 | `../sentryvo-demo5-vertical-1080x1920.mp4`, `-landscape-1920x1080.mp4` | 32 s | Video 5, product tour "Inside SentryVo" |
 | `../sentryvo-demo4-music.m4a`, `../sentryvo-demo5-music.m4a` | audio only | Video 4 and 5 soundtracks |
-| `../sentryvo-demo6-vertical-1080x1920.mp4`, `-landscape-1920x1080.mp4` | 36 s | Video 6, illustrated presenter in a three-piece suit explaining SentryVo (captions, no voice) |
+| `../sentryvo-demo6-vertical-1080x1920.mp4`, `-landscape-1920x1080.mp4` | 36 s | Video 6, illustrated presenter in a three-piece suit explaining SentryVo, with voiceover and captions |
+| `../sentryvo-demo6-voiceover-audio.m4a` | audio only | Video 6 final sound (voice over the music); `../sentryvo-demo6-music.m4a` is the music alone |
 
 Video 1 (31 s, "Leaked today. Gone tomorrow."): `promo.html`, `promo-landscape.html`, `make_music.py`.
 Video 2 (26 s, the 72-hour case): `promo2.html` (open with `#land` for landscape), `make_music2.py`.
@@ -30,7 +31,13 @@ All names, links and numbers in them are made-up examples.
 
 Video 6: `promo6.html` (same `#land` switch) and `make_music6.py`. The
 presenter is an SVG drawn by the page's script and posed every frame from
-the timeline (mouth follows the caption lines, blinks, arm gestures).
+the timeline (blinks, arm gestures). Voiceover: `make_voice6.py` speaks the
+lines with the open-source Kokoro TTS model (Apache-2.0, voice "am_michael",
+free for commercial use) and writes `promo6-voice.js`, which stretches the
+page's timeline to the voice and moves his mouth with its loudness. Pass the
+`voice6.json` it writes to `make_music6.py` so the music's hits follow too,
+then mix the voice over the music with ffmpeg's sidechaincompress (music
+ducks under the voice).
 
 Video 3 (the purchase walkthrough) is a recording of the real site pages, not
 an animation: `record-purchase.js` serves this repo at www.sentryvo.com inside

@@ -316,6 +316,7 @@ async function hashPageImages(pageUrl) {
 
 module.exports = {
   MAX_DISTANCE,
+  safeFetch,
   hashImageBuffer,
   hashImageUrl,
   hashPageImages,

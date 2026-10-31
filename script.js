@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   rememberReferral();
+  rememberProspectRef();
   prefillReferralFields();
   // Mobile nav toggle
   const toggle = document.querySelector('.nav-toggle');
@@ -81,6 +82,25 @@ function referralCodeFor(form) {
   return getReferralCode();
 }
 
+// ---------------- Outreach emails ----------------
+// Links in SentryVo's outreach emails look like
+// https://www.sentryvo.com/?scan=NAME&ref=prospect-12#free-scan-input: the
+// free scan box is filled in with their name, and the ref is kept (60 days)
+// so a later sign-up is credited to that email.
+const PROSPECT_KEY = 'sv_prospect_ref';
+function rememberProspectRef() {
+  const ref = new URLSearchParams(window.location.search).get('ref');
+  if (!ref || !/^prospect-\d{1,9}$/.test(ref)) return;
+  try { localStorage.setItem(PROSPECT_KEY, JSON.stringify({ ref, at: Date.now() })); } catch (e) { /* storage blocked */ }
+}
+function getProspectRef() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROSPECT_KEY) || 'null');
+    if (saved && /^prospect-\d{1,9}$/.test(saved.ref) && Date.now() - saved.at < 60 * 86400000) return saved.ref;
+  } catch (e) { /* storage blocked or bad value */ }
+  return '';
+}
+
 // ---------------- Registration + Lemon Squeezy checkout flow ----------------
 // Point this at your deployed backend (see /server/README.md).
 // Use http://localhost:4242 while testing locally.
@@ -159,7 +179,7 @@ function initRegisterForm() {
       const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/register`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ plan, platforms, name, email, mobile, password, aliases, originalLinks, referralCode }),
+        body: JSON.stringify({ plan, platforms, name, email, mobile, password, aliases, originalLinks, referralCode, prospectRef: getProspectRef() }),
       });
 
       if (!res.ok) {
@@ -208,6 +228,9 @@ function initFreeScan() {
     btn.textContent = 'Scan Used';
     if (note) note.innerHTML = 'You have used your free scan. <a href="register.html" style="color:var(--rust);">Get full protection</a> for daily scans and takedowns.';
   };
+  // Arrived from an outreach email: fill in their name.
+  const prefill = new URLSearchParams(window.location.search).get('scan');
+  if (prefill && !input.value) input.value = prefill.slice(0, 60);
   let alreadyUsed = false;
   try { alreadyUsed = localStorage.getItem(USED_KEY) === '1'; } catch (e) { /* storage blocked */ }
   if (alreadyUsed) markUsed();

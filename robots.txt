@@ -7,6 +7,7 @@ Allow: /
 Disallow: /dashboard.html
 Disallow: /agency-dashboard.html
 Disallow: /admin-add-client.html
+Disallow: /admin-prospects.html
 Disallow: /reset-password.html
 Disallow: /success.html
 Disallow: /failure.html

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prospects — SentryVo Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="icon" type="image/png" href="assets/logo-icon.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  .pp-wrap{ max-width:1180px; margin:0 auto; padding:40px 20px 80px; }
+  .pp-card{ background:var(--paper-2); border:1px solid var(--line); border-radius:16px; padding:24px; box-shadow:0 30px 60px -40px var(--shadow); margin-bottom:20px; }
+  .pp-row{ display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; }
+  .pp-row .field{ margin:0; flex:1 1 180px; }
+  .pp-stats{ display:flex; flex-wrap:wrap; gap:10px; }
+  .pp-stat{ padding:10px 14px; border-radius:12px; background:var(--paper-3); font:500 .78rem/1.2 var(--font-mono); letter-spacing:.04em; color:var(--text-mid); }
+  .pp-stat b{ display:block; font:700 1.3rem/1.1 var(--font-head); color:var(--text-hi); margin-top:4px; }
+  .pp-warn{ padding:14px 16px; border-radius:12px; background:rgba(199,122,18,.12); color:var(--text-hi); font-size:.9rem; margin-bottom:20px; }
+  .pp-tabs{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .pp-tabs button{ border:1px solid var(--line); background:transparent; color:var(--text-mid); border-radius:999px; padding:8px 14px; cursor:pointer; font:500 .85rem var(--font-body); }
+  .pp-tabs button.on{ background:var(--rust); border-color:var(--rust); color:var(--on-rust); }
+  .pp-table{ width:100%; border-collapse:collapse; font-size:.88rem; }
+  .pp-table th{ text-align:left; font:500 .7rem/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--text-low); padding:10px 8px; border-bottom:1px solid var(--line); }
+  .pp-table td{ padding:12px 8px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+  .pp-table td small{ display:block; color:var(--text-low); margin-top:3px; word-break:break-all; }
+  .pp-pill{ display:inline-block; font:500 .7rem/1 var(--font-mono); letter-spacing:.06em; padding:6px 9px; border-radius:999px; background:var(--paper-3); color:var(--text-mid); white-space:nowrap; }
+  .pp-pill.contact_found,.pp-pill.approved{ background:rgba(216,47,116,.14); color:var(--rust); }
+  .pp-pill.sent{ background:rgba(199,122,18,.15); color:var(--brass); }
+  .pp-pill.replied,.pp-pill.signed_up{ background:rgba(11,143,124,.15); color:var(--sage); }
+  .pp-pill.opted_out,.pp-pill.skipped{ opacity:.6; }
+  .pp-acts{ display:flex; flex-wrap:wrap; gap:6px; }
+  .pp-acts button, .pp-btn{ border:1px solid var(--line); background:var(--paper); color:var(--text-hi); border-radius:8px; padding:7px 10px; cursor:pointer; font:500 .8rem var(--font-body); white-space:nowrap; }
+  .pp-acts button:hover, .pp-btn:hover{ border-color:var(--rust); color:var(--rust); }
+  .pp-btn.primary{ background:var(--rust); color:var(--on-rust); border-color:var(--rust); }
+  .pp-btn.primary:hover{ color:var(--on-rust); opacity:.9; }
+  .pp-review td{ background:var(--paper-3); }
+  .pp-review textarea{ width:100%; min-height:300px; font:400 .9rem/1.5 var(--font-body); }
+  .pp-review pre{ white-space:pre-wrap; font:400 .8rem/1.5 var(--font-mono); color:var(--text-low); background:var(--paper); padding:12px; border-radius:10px; margin:0; }
+  .pp-results{ max-height:220px; overflow:auto; font-size:.8rem; margin:0; padding-left:18px; }
+  .pp-results a{ color:var(--text-mid); word-break:break-all; }
+  .pp-msg{ min-height:1.2em; font-size:.85rem; margin-top:10px; }
+  .pp-msg.err{ color:var(--rust); } .pp-msg.ok{ color:var(--sage); }
+  @media (max-width:800px){ .pp-table thead{ display:none; } .pp-table td{ display:block; border:0; padding:6px 4px; } .pp-table tr{ display:block; border-bottom:1px solid var(--line); padding:10px 0; } }
+</style>
+</head>
+<body>
+<div class="pp-wrap">
+  <span class="eyebrow">Admin · Outreach</span>
+  <h1 style="margin:8px 0 6px; font-size:2rem;">Prospects</h1>
+  <p style="color:var(--text-low); max-width:70ch; margin-bottom:22px;">Creators who are not clients yet. Scan for public leaks of their name, find a business email they published, review the draft and approve it. Nothing is sent without your approval, and nothing is ever reported to any site or Google for prospects.</p>
+
+  <div class="pp-card">
+    <div class="pp-row">
+      <div class="field"><label for="key">Admin key</label><input type="password" id="key" autocomplete="off"></div>
+      <button class="pp-btn primary" id="load" style="height:46px;">Load</button>
+    </div>
+    <p class="pp-msg" id="keymsg"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <div id="warn" class="pp-warn hidden"></div>
+    <div class="pp-card"><div class="pp-stats" id="stats"></div></div>
+
+    <div class="pp-card">
+      <h3 style="margin-bottom:14px;">Add leads</h3>
+      <div class="pp-tabs"><button data-tab="one" class="on">One creator</button><button data-tab="urls">Paste link-in-bio URLs</button><button data-tab="csv">Upload CSV</button></div>
+      <div data-pane="one">
+        <div class="pp-row">
+          <div class="field"><label>Handle / stage name</label><input id="a-handle" placeholder="lunademo"></div>
+          <div class="field"><label>Other spellings (comma separated)</label><input id="a-aliases" placeholder="luna_demo, luna demo"></div>
+        </div>
+        <div class="pp-row" style="margin-top:12px;">
+          <div class="field"><label>Link-in-bio or website</label><input id="a-url" placeholder="https://linktr.ee/lunademo"></div>
+          <div class="field" style="flex:0 1 220px;"><label>Region</label><select id="a-region"></select></div>
+          <div class="field"><label>Notes</label><input id="a-notes"></div>
+          <button class="pp-btn primary" id="add-one" style="height:46px;">Add</button>
+        </div>
+      </div>
+      <div data-pane="urls" class="hidden">
+        <div class="field"><label>One URL per line (the handle is taken from the address)</label><textarea id="a-urls" rows="5" placeholder="https://linktr.ee/lunademo&#10;https://beacons.ai/miademo"></textarea></div>
+        <div class="pp-row"><div class="field" style="flex:0 1 220px;"><label>Region for all</label><select id="a-urls-region"></select></div><button class="pp-btn primary" id="add-urls" style="height:46px;">Add all</button></div>
+      </div>
+      <div data-pane="csv" class="hidden">
+        <p style="font-size:.85rem; color:var(--text-low); margin-bottom:10px;">Columns (first row is the header): <code>handle,aliases,source_url,region,notes</code>. Region is <code>us</code>, <code>other</code>, <code>eu_uk_ca</code> or <code>unknown</code>. Put aliases with commas in quotes.</p>
+        <div class="pp-row"><input type="file" id="a-csv" accept=".csv,text/csv"><button class="pp-btn primary" id="add-csv">Upload</button></div>
+      </div>
+      <p class="pp-msg" id="addmsg"></p>
+    </div>
+
+    <div class="pp-card">
+      <div class="pp-row" style="justify-content:space-between; margin-bottom:10px;">
+        <h3>Leads</h3>
+        <div class="field" style="flex:0 1 220px;"><label>Show</label><select id="filter"><option value="">All</option></select></div>
+      </div>
+      <div style="overflow-x:auto;"><table class="pp-table"><thead><tr><th>Creator</th><th>Region</th><th>Matches</th><th>Contact</th><th>Status</th><th>Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+      <p class="pp-msg" id="rowmsg"></p>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const STATUS = { new: 'New', scanned: 'Scanned', contact_found: 'Email found', dm_manually: 'DM manually', approved: 'Approved (queued)', sent: 'Sent', replied: 'Replied', opted_out: 'Opted out', signed_up: 'Signed up', skipped: 'Skipped' };
+  let key = '';
+  try { key = sessionStorage.getItem('sv_admin_key') || ''; } catch (e) { /* storage blocked */ }
+  $('key').value = key;
+  let state = { prospects: [], stats: null, regions: {} };
+  let open = null;
+
+  async function api(path, opts = {}) {
+    const res = await fetch(`${SENTRYVO_BACKEND_URL}${path}`, {
+      method: opts.method || 'GET',
+      headers: { 'X-Admin-Key': key, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  }
+  const msg = (el, text, ok) => { el.textContent = text || ''; el.className = 'pp-msg ' + (ok ? 'ok' : 'err'); };
+
+  async function load() {
+    key = $('key').value.trim();
+    try { sessionStorage.setItem('sv_admin_key', key); } catch (e) { /* storage blocked */ }
+    try {
+      const data = await api('/api/admin/prospects');
+      state = data;
+      $('app').classList.remove('hidden');
+      msg($('keymsg'), '');
+      fillSelects();
+      render();
+    } catch (err) {
+      msg($('keymsg'), err.message);
+    }
+  }
+
+  function fillSelects() {
+    const opts = Object.entries(state.regions).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+    for (const id of ['a-region', 'a-urls-region']) if (!$(id).options.length) { $(id).innerHTML = opts; $(id).value = 'us'; }
+    if ($('filter').options.length === 1) $('filter').insertAdjacentHTML('beforeend', Object.entries(STATUS).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join(''));
+  }
+
+  function render() {
+    const s = state.stats;
+    $('warn').classList.toggle('hidden', !s.missingSettings.length);
+    $('warn').innerHTML = s.missingSettings.length ? `<strong>Sending is off</strong> until these settings are added on Render (Environment): ${s.missingSettings.map(esc).join(', ')}. You can still add, scan and review leads.` : '';
+    const b = s.byStatus;
+    $('stats').innerHTML = [
+      ['Leads', s.total], ['Email found', b.contact_found], ['DM manually', b.dm_manually], ['Sent', b.sent], ['Replied', b.replied],
+      ['Signed up', b.signed_up], ['Opted out', b.opted_out], ['Emails, last 24 h', `${s.sentLast24h} / ${s.dailyLimit}`], ['Scans today', `${s.scansToday} / ${s.scansPerDay}`],
+    ].map(([l, v]) => `<div class="pp-stat">${esc(l)}<b>${esc(v ?? 0)}</b></div>`).join('');
+    const f = $('filter').value;
+    const list = state.prospects.filter((p) => !f || p.status === f);
+    $('rows').innerHTML = list.map(row).join('') || '<tr><td colspan="6" style="color:var(--text-low)">No leads yet.</td></tr>';
+  }
+
+  function row(p) {
+    const contact = p.contact_email ? `${esc(p.contact_email)}<small>from ${esc(p.contact_source)}</small>` : p.contact_source === 'none' ? '<span style="color:var(--text-low)">None published</span>' : '<span style="color:var(--text-low)">Not checked</span>';
+    const regionSel = `<select data-act="region" data-id="${p.id}" style="padding:6px; font-size:.8rem;">${Object.entries(state.regions).map(([v, l]) => `<option value="${v}" ${v === p.region ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    const closed = ['sent', 'replied', 'opted_out', 'signed_up', 'skipped'].includes(p.status);
+    const acts = [
+      `<button data-act="scan" data-id="${p.id}">${p.scanned_at ? 'Rescan' : 'Scan'}</button>`,
+      p.source_url ? `<button data-act="contact" data-id="${p.id}">Find email</button>` : '',
+      `<button data-act="review" data-id="${p.id}">${open === p.id ? 'Close' : p.status === 'dm_manually' ? 'DM text' : 'Review'}</button>`,
+      p.status === 'sent' ? `<button data-act="replied" data-id="${p.id}">Mark replied</button>` : '',
+      !closed ? `<button data-act="skip" data-id="${p.id}">Skip</button>` : `<button data-act="reopen" data-id="${p.id}">Reopen</button>`,
+      `<button data-act="delete" data-id="${p.id}">Delete</button>`,
+    ].join('');
+    const main = `<tr>
+      <td><strong>${esc(p.handle)}</strong><small>${esc(p.aliases)}</small>${p.source_url ? `<small><a href="${esc(p.source_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-mid)">${esc(p.source_url)}</a></small>` : ''}${p.notes ? `<small>${esc(p.notes)}</small>` : ''}</td>
+      <td>${regionSel}</td>
+      <td><strong>${p.scanned_at ? p.match_count : '–'}</strong>${p.scanned_at ? `<small>${new Date(p.scanned_at).toLocaleDateString()}</small>` : ''}</td>
+      <td>${contact}</td>
+      <td><span class="pp-pill ${esc(p.status)}">${esc(STATUS[p.status] || p.status)}</span>${p.sent_at ? `<small>sent ${new Date(p.sent_at).toLocaleDateString()}${p.followup_sent_at ? ', follow-up sent' : ''}</small>` : ''}</td>
+      <td><div class="pp-acts">${acts}</div></td></tr>`;
+    return main + (open === p.id ? review(p) : '');
+  }
+
+  function review(p) {
+    const canEmail = p.contact_email && !['sent', 'replied', 'opted_out', 'signed_up', 'skipped'].includes(p.status);
+    return `<tr class="pp-review"><td colspan="6">
+      <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr); gap:24px;">
+        <div>
+          <p style="font-weight:600; margin-bottom:6px;">Matches found (${p.match_count})</p>
+          <p style="font-size:.78rem; color:var(--text-low); margin-bottom:8px;">Check these really are about this creator before approving. They are never put in the email.</p>
+          <ol class="pp-results" id="res-${p.id}"><li>Loading…</li></ol>
+          <p style="font-weight:600; margin:16px 0 6px;">Contact email</p>
+          <div class="pp-row"><div class="field"><input id="em-${p.id}" value="${esc(p.contact_email || '')}" placeholder="business@…"></div></div>
+          <div class="pp-row" style="margin-top:8px;"><div class="field"><input id="ems-${p.id}" value="${esc(p.contact_email ? p.contact_source : '')}" placeholder="Page where they published it (https://…)"></div><button class="pp-btn" data-act="saveemail" data-id="${p.id}">Save</button></div>
+          <p style="font-weight:600; margin:16px 0 6px;">DM text (for creators without a business email)</p>
+          <pre id="dm-${p.id}">${esc(p.dm_template)}</pre>
+          <button class="pp-btn" data-act="copydm" data-id="${p.id}" style="margin-top:8px;">Copy DM text</button>
+        </div>
+        <div>
+          ${canEmail ? `
+          <div class="pp-row" style="justify-content:space-between; margin-bottom:8px;"><p style="font-weight:600;">Email draft</p><button class="pp-btn" data-act="draft" data-id="${p.id}">${p.draft_body ? 'Rebuild draft' : 'Build draft'}</button></div>
+          ${p.draft_body ? `
+          <div class="field"><label>Subject</label><input id="sub-${p.id}" value="${esc(p.draft_subject)}"></div>
+          <div class="field"><label>Message</label><textarea id="body-${p.id}">${esc(p.draft_body)}</textarea></div>
+          <p style="font-size:.78rem; color:var(--text-low); margin:0 0 6px;">Added to every email automatically (can't be removed):</p>
+          <pre>${esc(p.footer_preview || '')}</pre>
+          <div class="pp-row" style="margin-top:14px;"><button class="pp-btn" data-act="savedraft" data-id="${p.id}">Save draft</button><button class="pp-btn primary" data-act="approve" data-id="${p.id}">Approve &amp; send</button></div>` : '<p style="color:var(--text-low)">Scan first, then build the draft.</p>'}
+          ` : `<p style="color:var(--text-low)">${p.contact_email ? 'This lead is ' + esc(STATUS[p.status]) + '.' : 'No published business email. Use the DM text, or add an email they published.'}</p>`}
+          <p class="pp-msg" id="rmsg-${p.id}"></p>
+        </div>
+      </div></td></tr>`;
+  }
+
+  async function loadResults(id) {
+    try {
+      const { results } = await api(`/api/admin/prospects/${id}/results`);
+      const el = $(`res-${id}`);
+      if (el) el.innerHTML = results.length ? results.map((r) => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title || r.url)}</a><br><span style="color:var(--text-low)">${esc(r.site)}</span></li>`).join('') : '<li>No matches.</li>';
+    } catch (err) { /* shown as loading */ }
+  }
+
+  function replace(p) {
+    const i = state.prospects.findIndex((x) => x.id === p.id);
+    if (i >= 0) state.prospects[i] = p; else state.prospects.unshift(p);
+  }
+  async function refreshStats() { try { const d = await api('/api/admin/prospects'); state = d; } catch (e) { /* keep */ } }
+
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn || btn.tagName === 'SELECT') return;
+    const id = Number(btn.dataset.id), act = btn.dataset.act;
+    const rmsg = () => $(`rmsg-${id}`) || $('rowmsg');
+    btn.disabled = true;
+    try {
+      if (act === 'scan') { msg($('rowmsg'), 'Scanning… this takes up to a minute.', true); const d = await api(`/api/admin/prospects/${id}/scan`, { method: 'POST' }); replace(d.prospect); msg($('rowmsg'), `Scan done: ${d.prospect.match_count} match(es)${d.failed ? `, ${d.failed} search(es) failed` : ''}.`, true); }
+      if (act === 'contact') { msg($('rowmsg'), 'Reading their public page…', true); const d = await api(`/api/admin/prospects/${id}/find-contact`, { method: 'POST' }); replace(d.prospect); const pr = d.prospect; msg($('rowmsg'), pr.status === 'opted_out' ? `${pr.contact_email} unsubscribed earlier and won't be contacted.` : pr.contact_email ? `Business email found: ${pr.contact_email}` : 'No published business email. Contact by DM.', pr.contact_email && pr.status !== 'opted_out'); }
+      if (act === 'review') { open = open === id ? null : id; }
+      if (act === 'replied' || act === 'skip' || act === 'reopen') { const d = await api(`/api/admin/prospects/${id}`, { method: 'PUT', body: { action: act } }); replace(d.prospect); }
+      if (act === 'delete') { if (!confirm('Delete this lead and its scan results?')) { btn.disabled = false; return; } await api(`/api/admin/prospects/${id}`, { method: 'DELETE' }); state.prospects = state.prospects.filter((p) => p.id !== id); if (open === id) open = null; }
+      if (act === 'draft') { const d = await api(`/api/admin/prospects/${id}/draft`, { method: 'POST' }); replace(d.prospect); }
+      if (act === 'savedraft') { const d = await api(`/api/admin/prospects/${id}`, { method: 'PUT', body: { subject: $(`sub-${id}`).value, body: $(`body-${id}`).value } }); replace(d.prospect); }
+      if (act === 'saveemail') { const d = await api(`/api/admin/prospects/${id}`, { method: 'PUT', body: { contactEmail: $(`em-${id}`).value, contactSource: $(`ems-${id}`).value } }); replace(d.prospect); }
+      if (act === 'copydm') { await navigator.clipboard.writeText($(`dm-${id}`).textContent); btn.textContent = 'Copied'; btn.disabled = false; return; }
+      if (act === 'approve') {
+        if (!confirm('Send this email (now, or as soon as today\'s limit allows)?')) { btn.disabled = false; return; }
+        const d = await api(`/api/admin/prospects/${id}/approve`, { method: 'POST', body: { subject: $(`sub-${id}`).value, body: $(`body-${id}`).value } });
+        replace(d.prospect);
+        msg($('rowmsg'), d.sentNow ? 'Approved and sent.' : 'Approved. It will be sent when today\'s limit allows.', true);
+      }
+      await refreshStats();
+      render();
+      if (open) loadResults(open);
+    } catch (err) {
+      msg(rmsg(), err.message);
+      btn.disabled = false;
+    }
+  });
+
+  document.addEventListener('change', async (e) => {
+    if (e.target.dataset.act === 'region') {
+      try { const d = await api(`/api/admin/prospects/${e.target.dataset.id}`, { method: 'PUT', body: { region: e.target.value } }); replace(d.prospect); } catch (err) { msg($('rowmsg'), err.message); }
+    }
+    if (e.target.id === 'filter') render();
+  });
+
+  document.querySelectorAll('.pp-tabs button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.pp-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== b.dataset.tab));
+  }));
+
+  async function addLeads(leads) {
+    try {
+      const d = await api('/api/admin/prospects', { method: 'POST', body: { leads } });
+      d.prospects.forEach(replace);
+      await refreshStats();
+      render();
+      msg($('addmsg'), `Added ${d.added} lead(s)${d.skipped ? `, skipped ${d.skipped} without a handle` : ''}.`, true);
+    } catch (err) { msg($('addmsg'), err.message); }
+  }
+  $('add-one').addEventListener('click', () => addLeads([{ handle: $('a-handle').value, aliases: $('a-aliases').value, sourceUrl: $('a-url').value, region: $('a-region').value, notes: $('a-notes').value }]));
+  $('add-urls').addEventListener('click', () => addLeads($('a-urls').value.split('\n').map((l) => l.trim()).filter(Boolean).map((u) => ({ sourceUrl: u, region: $('a-urls-region').value }))));
+
+  // Small CSV parser (quoted fields, commas inside quotes).
+  function parseCsv(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((x) => x.trim()));
+  }
+  $('add-csv').addEventListener('click', async () => {
+    const file = $('a-csv').files[0];
+    if (!file) return msg($('addmsg'), 'Choose a CSV file first.');
+    const rows = parseCsv(await file.text());
+    const head = rows.shift().map((h) => h.trim().toLowerCase());
+    const col = (r, name) => (head.indexOf(name) >= 0 ? (r[head.indexOf(name)] || '').trim() : '');
+    addLeads(rows.map((r) => ({ handle: col(r, 'handle'), aliases: col(r, 'aliases'), sourceUrl: col(r, 'source_url'), region: col(r, 'region') || 'unknown', notes: col(r, 'notes') })));
+  });
+
+  $('load').addEventListener('click', load);
+  $('key').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+  if (key) load();
+})();
+</script>
+</body>
+</html>

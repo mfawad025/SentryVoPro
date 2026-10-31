@@ -201,6 +201,60 @@ async function initSchema() {
       scanned_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Prospect outreach (admin only): creators who are NOT clients, found
+    -- by the admin, scanned for public leaks of their name, and contacted
+    -- only through a business email they published themselves, after the
+    -- admin approves each email. See outreach.js.
+    CREATE TABLE IF NOT EXISTS prospects (
+      id SERIAL PRIMARY KEY,
+      handle TEXT NOT NULL,
+      aliases TEXT NOT NULL,
+      source_url TEXT,
+      region TEXT NOT NULL DEFAULT 'unknown',
+      status TEXT NOT NULL DEFAULT 'new',
+      match_count INTEGER NOT NULL DEFAULT 0,
+      contact_email TEXT,
+      contact_source TEXT,
+      own_links TEXT,
+      notes TEXT,
+      draft_subject TEXT,
+      draft_body TEXT,
+      scanned_at TIMESTAMPTZ,
+      approved_at TIMESTAMPTZ,
+      sent_at TIMESTAMPTZ,
+      followup_sent_at TIMESTAMPTZ,
+      replied_at TIMESTAMPTZ,
+      signed_up_user_id INTEGER,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    -- What a prospect scan found. Never used for takedowns, Google or any
+    -- report to a website: only counted and summarised in the outreach email.
+    CREATE TABLE IF NOT EXISTS prospect_results (
+      id SERIAL PRIMARY KEY,
+      prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      title TEXT,
+      site TEXT,
+      found_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (prospect_id, url)
+    );
+    -- Every outreach email sent (first contact or follow-up).
+    CREATE TABLE IF NOT EXISTS prospect_emails (
+      id SERIAL PRIMARY KEY,
+      prospect_id INTEGER REFERENCES prospects(id) ON DELETE SET NULL,
+      kind TEXT NOT NULL,
+      to_email TEXT NOT NULL,
+      subject TEXT,
+      body TEXT,
+      sent_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    -- Addresses that opted out: never contacted again. Kept forever.
+    CREATE TABLE IF NOT EXISTS email_blocklist (
+      email TEXT PRIMARY KEY,
+      reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     -- Small key/value store for scheduler state that must survive restarts
     -- (e.g. the day the admin's daily email was last sent).
     CREATE TABLE IF NOT EXISTS app_state (
@@ -732,6 +786,90 @@ async function getPendingAdminDigestLeaks({ includeSent = false } = {}) {
 
 // Every account that signed up with a partner's referral code (?aff=CODE),
 // for the admin's referrals page.
+// ---------- Prospects (outreach) ----------
+const PROSPECT_FIELDS = ['handle', 'aliases', 'source_url', 'region', 'status', 'match_count', 'contact_email', 'contact_source',
+  'own_links', 'notes', 'draft_subject', 'draft_body', 'scanned_at', 'approved_at', 'sent_at', 'followup_sent_at', 'replied_at', 'signed_up_user_id'];
+
+async function addProspect({ handle, aliases, sourceUrl = null, region = 'unknown', notes = null }) {
+  const result = await pool.query(
+    `INSERT INTO prospects (handle, aliases, source_url, region, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [handle, aliases, sourceUrl, region, notes]
+  );
+  return result.rows[0];
+}
+
+async function getProspect(id) {
+  const result = await pool.query(`SELECT * FROM prospects WHERE id = $1`, [id]);
+  return result.rows[0] || null;
+}
+
+async function listProspects() {
+  const result = await pool.query(`SELECT * FROM prospects ORDER BY created_at DESC LIMIT 1000`);
+  return result.rows;
+}
+
+// Updates only the given columns (from PROSPECT_FIELDS).
+async function updateProspect(id, fields) {
+  const keys = Object.keys(fields).filter((k) => PROSPECT_FIELDS.includes(k));
+  if (!keys.length) return getProspect(id);
+  const sets = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+  const result = await pool.query(`UPDATE prospects SET ${sets} WHERE id = $1 RETURNING *`, [id, ...keys.map((k) => fields[k])]);
+  return result.rows[0] || null;
+}
+
+async function deleteProspect(id) {
+  await pool.query(`DELETE FROM prospects WHERE id = $1`, [id]);
+}
+
+async function replaceProspectResults(prospectId, results) {
+  await pool.query(`DELETE FROM prospect_results WHERE prospect_id = $1`, [prospectId]);
+  for (const r of results) {
+    await pool.query(
+      `INSERT INTO prospect_results (prospect_id, url, title, site) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+      [prospectId, r.url, r.title || null, r.site || null]
+    );
+  }
+}
+
+async function getProspectResults(prospectId) {
+  const result = await pool.query(`SELECT * FROM prospect_results WHERE prospect_id = $1 ORDER BY id`, [prospectId]);
+  return result.rows;
+}
+
+async function logProspectEmail({ prospectId, kind, to, subject, body }) {
+  await pool.query(
+    `INSERT INTO prospect_emails (prospect_id, kind, to_email, subject, body) VALUES ($1, $2, $3, $4, $5)`,
+    [prospectId, kind, to, subject, body]
+  );
+}
+
+// Outreach emails sent since the given moment (for the daily cap).
+async function countProspectEmailsSince(isoTimestamp) {
+  const result = await pool.query(`SELECT COUNT(*) AS n FROM prospect_emails WHERE sent_at >= $1`, [isoTimestamp]);
+  return Number(result.rows[0].n) || 0;
+}
+
+async function isEmailBlocked(email) {
+  const result = await pool.query(`SELECT 1 FROM email_blocklist WHERE email = LOWER($1)`, [email]);
+  return result.rows.length > 0;
+}
+
+async function blockEmail(email, reason = 'opt-out') {
+  await pool.query(`INSERT INTO email_blocklist (email, reason) VALUES (LOWER($1), $2) ON CONFLICT (email) DO NOTHING`, [email, reason]);
+  await pool.query(`UPDATE prospects SET status = 'opted_out' WHERE LOWER(contact_email) = LOWER($1) AND status <> 'signed_up'`, [email]);
+}
+
+// Prospects who never signed up are deleted after `days` (their scan
+// results and email text go with them; the opt-out blocklist stays).
+async function deleteOldProspects(days) {
+  const result = await pool.query(
+    `DELETE FROM prospects WHERE status <> 'signed_up' AND created_at < NOW() - ($1 || ' days')::interval`,
+    [String(days)]
+  );
+  await pool.query(`DELETE FROM prospect_emails WHERE prospect_id IS NULL`);
+  return result.rowCount;
+}
+
 async function getReferredUsers() {
   const result = await pool.query(
     `SELECT id, name, email, plan, status, ls_subscription_status, subscription_ends_at, created_at, referral_code
@@ -851,6 +989,18 @@ module.exports = {
   getLeakById,
   approveLeak,
   getReferredUsers,
+  addProspect,
+  getProspect,
+  listProspects,
+  updateProspect,
+  deleteProspect,
+  replaceProspectResults,
+  getProspectResults,
+  logProspectEmail,
+  countProspectEmailsSince,
+  isEmailBlocked,
+  blockEmail,
+  deleteOldProspects,
   getAppState,
   setAppState,
   countLeaksSince,

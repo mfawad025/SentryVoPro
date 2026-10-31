@@ -374,6 +374,8 @@ app.post('/api/register', accountLimiter, async (req, res) => {
       : String(originalLinks || '').split('\n').map((l) => l.trim());
     await db.addOriginalLinks(userId, linkList);
     if (referralCode) await db.setUserReferralCode(userId, referralCode);
+    // Came from an outreach email (?ref=prospect-ID): mark that prospect signed up.
+    if (req.body?.prospectRef) await require('./outreach').markSignedUp(req.body.prospectRef, userId).catch(() => {});
 
     const checkoutUrl = buildCheckoutUrl(plan, { userId, name, email, referralCode });
 
@@ -426,6 +428,7 @@ app.post('/api/register/agency', accountLimiter, async (req, res) => {
     });
     await db.setUserCheckoutRef(ownerId, String(ownerId));
     if (referralCode) await db.setUserReferralCode(ownerId, referralCode);
+    if (req.body?.prospectRef) await require('./outreach').markSignedUp(req.body.prospectRef, ownerId).catch(() => {});
 
     const checkoutUrl = buildCheckoutUrl(tier, { userId: ownerId, name: ownerName, email, referralCode });
 
@@ -1520,6 +1523,143 @@ app.get('/api/admin/send-report', async (req, res) => {
   } catch (err) {
     console.error('Admin send-report error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------- Admin: prospect outreach (see outreach.js) ----------------
+// Used by admin-prospects.html with the X-Admin-Key header. Prospects are
+// creators who are not clients; nothing here sends takedowns or reports.
+function prospectView(p) {
+  const outreach = require('./outreach');
+  return { ...p, own_links: undefined, dm_template: outreach.dmTemplate(p), footer_preview: p.contact_email ? outreach.footer(p) : null };
+}
+const adminProspect = (handler) => async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    await handler(req, res);
+  } catch (err) {
+    if (!err.status) console.error('Prospect admin error:', err.message);
+    res.status(err.status || 500).json({ error: err.message });
+  }
+};
+const prospectId = (req) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { const e = new Error('Bad prospect id'); e.status = 400; throw e; }
+  return id;
+};
+
+app.get('/api/admin/prospects', adminProspect(async (req, res) => {
+  const outreach = require('./outreach');
+  res.json({ ok: true, stats: await outreach.stats(), regions: outreach.REGIONS, prospects: (await db.listProspects()).map(prospectView) });
+}));
+
+// Body: one lead or { leads: [...] }. A lead: { handle?, aliases?, sourceUrl?, region?, notes? }.
+app.post('/api/admin/prospects', adminProspect(async (req, res) => {
+  const outreach = require('./outreach');
+  const leads = Array.isArray(req.body?.leads) ? req.body.leads : [req.body || {}];
+  if (leads.length > 500) return res.status(400).json({ error: 'At most 500 leads at a time' });
+  const added = [], skipped = [];
+  for (const lead of leads) {
+    let sourceUrl = String(lead.sourceUrl || lead.source_url || '').trim() || null;
+    if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) sourceUrl = `https://${sourceUrl}`;
+    if (sourceUrl) { try { new URL(sourceUrl); } catch { sourceUrl = null; } }
+    const handle = String(lead.handle || '').trim().replace(/^@/, '') || (sourceUrl && outreach.handleFromUrl(sourceUrl));
+    if (!handle || handle.length > 80) { skipped.push(lead); continue; }
+    const aliases = outreach.parseAliases(handle, lead.aliases).join(', ');
+    const region = Object.keys(outreach.REGIONS).includes(lead.region) ? lead.region : 'unknown';
+    added.push(prospectView(await db.addProspect({ handle, aliases, sourceUrl, region, notes: String(lead.notes || '').slice(0, 1000) || null })));
+  }
+  res.json({ ok: true, added: added.length, skipped: skipped.length, prospects: added });
+}));
+
+app.put('/api/admin/prospects/:id', adminProspect(async (req, res) => {
+  const outreach = require('./outreach');
+  const id = prospectId(req);
+  const b = req.body || {};
+  const fields = {};
+  if (b.handle !== undefined) fields.handle = String(b.handle).trim().slice(0, 80);
+  if (b.aliases !== undefined) fields.aliases = outreach.parseAliases(fields.handle || (await db.getProspect(id))?.handle, b.aliases).join(', ');
+  if (b.region !== undefined && Object.keys(outreach.REGIONS).includes(b.region)) fields.region = b.region;
+  if (b.notes !== undefined) fields.notes = String(b.notes).slice(0, 1000);
+  if (b.sourceUrl !== undefined) fields.source_url = String(b.sourceUrl).trim() || null;
+  if (b.contactEmail !== undefined) {
+    const email = String(b.contactEmail).trim().toLowerCase();
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'That email address does not look right' });
+    fields.contact_email = email || null;
+    // An address typed by the admin must still be one the creator published:
+    // the page where it is listed is required (and shown in the email).
+    if (email) {
+      const page = String(b.contactSource || '').trim();
+      if (!/^https?:\/\/\S+$/i.test(page)) return res.status(400).json({ error: 'Add the address of the page where the creator published this email' });
+      fields.contact_source = page;
+    }
+  }
+  if (b.subject !== undefined) fields.draft_subject = String(b.subject).slice(0, 200);
+  if (b.body !== undefined) fields.draft_body = String(b.body).slice(0, 5000);
+  // Admin status changes: replied (stops the follow-up), skipped, or back to new.
+  if (b.action === 'replied') Object.assign(fields, { status: 'replied', replied_at: new Date().toISOString() });
+  if (b.action === 'skip') fields.status = 'skipped';
+  if (b.action === 'reopen') fields.status = 'new';
+  const p = await db.updateProspect(id, fields);
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+  res.json({ ok: true, prospect: prospectView(p) });
+}));
+
+app.delete('/api/admin/prospects/:id', adminProspect(async (req, res) => {
+  await db.deleteProspect(prospectId(req));
+  res.json({ ok: true });
+}));
+
+app.get('/api/admin/prospects/:id/results', adminProspect(async (req, res) => {
+  res.json({ ok: true, results: await db.getProspectResults(prospectId(req)) });
+}));
+
+app.post('/api/admin/prospects/:id/scan', adminProspect(async (req, res) => {
+  const out = await require('./outreach').scanProspectById(prospectId(req));
+  res.json({ ok: true, ...out, prospect: prospectView(out.prospect) });
+}));
+
+app.post('/api/admin/prospects/:id/find-contact', adminProspect(async (req, res) => {
+  res.json({ ok: true, prospect: prospectView(await require('./outreach').findContactById(prospectId(req))) });
+}));
+
+app.post('/api/admin/prospects/:id/draft', adminProspect(async (req, res) => {
+  res.json({ ok: true, prospect: prospectView(await require('./outreach').makeDraft(prospectId(req))) });
+}));
+
+app.post('/api/admin/prospects/:id/approve', adminProspect(async (req, res) => {
+  const out = await require('./outreach').approve(prospectId(req), { subject: req.body?.subject, body: req.body?.body });
+  res.json({ ok: true, sentNow: out.sentNow, prospect: prospectView(out.prospect) });
+}));
+
+// ---------------- Outreach opt-out (public, signed link) ----------------
+// GET shows a page with an Unsubscribe button (mail scanners that open links
+// can't unsubscribe anyone); POST unsubscribes. Mail clients' one-click
+// unsubscribe (List-Unsubscribe-Post) also POSTs here with the link's query.
+app.get('/api/outreach/opt-out', (req, res) => {
+  const { checkOptOutToken } = require('./outreach');
+  const email = String(req.query.e || '').toLowerCase();
+  if (!email || !checkOptOutToken(email, req.query.t)) {
+    return res.status(400).send(leakActionPage('Link not valid', '<p>This unsubscribe link is not valid. Reply to the email and we will remove you by hand.</p>'));
+  }
+  res.send(leakActionPage('Unsubscribe', `<p>Stop all emails from SentryVo to <strong>${escapeHtmlServer(email)}</strong>?</p>
+    <form method="post" action="/api/outreach/opt-out?e=${encodeURIComponent(email)}&amp;t=${escapeHtmlServer(req.query.t)}">
+      <button style="background:#D82F74;color:#fff;border:0;border-radius:8px;padding:12px 22px;font-size:1rem;font-weight:bold;cursor:pointer">Unsubscribe</button>
+    </form>`));
+});
+
+app.post('/api/outreach/opt-out', express.urlencoded({ extended: false }), async (req, res) => {
+  const { checkOptOutToken } = require('./outreach');
+  const email = String(req.query.e || req.body?.e || '').toLowerCase();
+  const token = req.query.t || req.body?.t;
+  if (!email || !checkOptOutToken(email, token)) return res.status(400).send(leakActionPage('Link not valid', '<p>This unsubscribe link is not valid.</p>'));
+  try {
+    await db.blockEmail(email, 'opt-out');
+    console.log('Outreach: an address opted out.');
+    res.send(leakActionPage('Unsubscribed', '<p>Done. You won\'t receive any more emails from SentryVo.</p>'));
+  } catch (err) {
+    console.error('Opt-out failed:', err.message);
+    res.status(500).send(leakActionPage('Something went wrong', '<p>Please reply to the email and we will remove you by hand.</p>'));
   }
 });
 

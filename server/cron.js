@@ -38,7 +38,8 @@ async function sendAdminDigestIfNeeded({ includeSent = false } = {}) {
   try {
     const pendingLeaks = await db.getPendingAdminDigestLeaks({ includeSent });
     const status = await buildClientStatus();
-    await sendAdminDigestEmail(pendingLeaks, status);
+    const outreach = await require('./outreach').stats().catch(() => null);
+    await sendAdminDigestEmail(pendingLeaks, status, outreach);
     await db.markLeaksDigestSent(pendingLeaks.map((l) => l.id));
     console.log(`Admin daily email sent: ${pendingLeaks.length} link(s), ${status.length} client(s).`);
     return { sent: pendingLeaks.length, clients: status.length };
@@ -88,6 +89,8 @@ async function runScheduledCheck(source = 'cron') {
     }
     // After the scans, so the digest includes anything they just found.
     await sendDailyDigestIfDue();
+    // Approved outreach emails, follow-ups and old-prospect cleanup.
+    await require('./outreach').runOutreachJobs();
     return { scanned: results.length };
   } finally {
     checkInProgress = false;

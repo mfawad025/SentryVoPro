@@ -262,7 +262,17 @@ function buildClientStatusHtml(status) {
       <p style="margin:6px 0 0; font-size:.75rem; color:#888;">Times are ${esc(REPORT_TIMEZONE)} time.</p>`;
 }
 
-function buildAdminDigestHtml(leaks, status = null) {
+// One line about prospect outreach in the admin's daily email.
+function buildOutreachHtml(o) {
+  if (!o || !o.total) return '';
+  const b = o.byStatus;
+  const ready = b.contact_found || 0;
+  return `
+      <p style="margin:22px 0 4px; font-weight:bold;">Outreach</p>
+      <p style="margin:0; font-size:.85rem; color:#444;">${o.sentLast24h} email(s) sent in the last 24 hours (limit ${o.dailyLimit}) · ${b.sent || 0} waiting for a reply · ${b.replied || 0} replied · <strong>${b.signed_up || 0} signed up</strong> · ${b.opted_out || 0} opted out${ready ? ` · <strong style="color:#D82F74;">${ready} draft(s) to review</strong>` : ''}${b.dm_manually ? ` · ${b.dm_manually} to contact by DM` : ''}</p>`;
+}
+
+function buildAdminDigestHtml(leaks, status = null, outreach = null) {
   const byCreator = {};
   for (const leak of leaks) {
     const key = leak.creator_email;
@@ -317,6 +327,7 @@ function buildAdminDigestHtml(leaks, status = null) {
     <div style="font-family:Arial,sans-serif; max-width:680px; margin:0 auto; color:#1A1530;">
       <h2 style="color:#D82F74; margin-bottom:4px;">SentryVo · Daily summary</h2>
       ${status ? buildClientStatusHtml(status) : ''}
+      ${buildOutreachHtml(outreach)}
       <h3 style="margin:28px 0 4px;">Links to report today</h3>
       ${leaks.length ? `
       <p style="margin-top:0;">${leaks.length} link(s) across ${Object.keys(byCreator).length} creator(s).</p>
@@ -326,7 +337,7 @@ function buildAdminDigestHtml(leaks, status = null) {
   `;
 }
 
-async function sendAdminDigestEmail(leaks, status = null) {
+async function sendAdminDigestEmail(leaks, status = null, outreach = null) {
   const mailer = getMailer();
   if (!mailer) {
     throw new Error('SMTP is not configured (SMTP_HOST is missing or still the placeholder value)');
@@ -357,7 +368,7 @@ async function sendAdminDigestEmail(leaks, status = null) {
     from: process.env.REPORT_FROM_EMAIL,
     to: adminEmail,
     subject: leaks.length ? `SentryVo daily summary — ${leaks.length} link(s) to report` : 'SentryVo daily summary — no new links today',
-    html: buildAdminDigestHtml(leaks, status),
+    html: buildAdminDigestHtml(leaks, status, outreach),
     attachments: lines.length
       ? [{ filename: `google-delist-links-${new Date().toISOString().slice(0, 10)}.txt`, content: lines.join('\n'), contentType: 'text/plain' }]
       : [],

@@ -270,7 +270,14 @@ app.post('/api/scan/free', freeScanPerIpLimiter, async (req, res) => {
     claimedHash = visitorHash;
 
     siteWideScanCount++;
-    const results = await searchGoogle(`"${alias}" leaked`);
+    // Same searches and filtering as the admin's prospect scan (scanner.js
+    // scanProspect), so the count a creator sees here matches what an
+    // outreach email told them: only pages whose address or title names
+    // them, on leak / tube / forum / Telegram sites, not their own pages.
+    const { scanProspect } = require('./scanner');
+    const scan = await scanProspect([alias], []);
+    if (scan.queries && scan.failed === scan.queries) throw new Error('All free-scan searches failed');
+    const results = scan.results;
     claimedHash = null; // the scan ran, so the free scan is now spent
 
     res.cookie(FREE_SCAN_COOKIE_NAME, '1', {

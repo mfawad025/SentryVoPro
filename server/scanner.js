@@ -960,7 +960,7 @@ async function sendReportIfDue(user, fallbackSince = new Date().toISOString()) {
   return { reportSent: true, newLeaks: leaksSinceLastReport.length, summary };
 }
 
-// ---------- Prospect scan (outreach, see outreach.js) ----------
+// ---------- Prospect scan (outreach, see outreach.js) + website free scan ----------
 // For creators who are NOT clients: text search only (no photos), the same
 // strict alias matching, and only high-confidence pages. Big platforms and
 // link-in-bio / creator sites are left out (posts there are usually the
@@ -975,23 +975,24 @@ async function scanProspect(aliases, ownLinks = []) {
   const found = new Map();
   let queries = 0, failed = 0;
   for (const alias of aliases.slice(0, PROSPECT_MAX_ALIASES)) {
-    for (const query of buildTextQueries(alias, [], siteGroups)) {
-      queries++;
-      try {
-        for (const r of await searchGoogle(query)) {
-          if (!r.url || found.has(r.url)) continue;
-          let host;
-          try { host = new URL(r.url).hostname.replace(/^www\./, '').toLowerCase(); } catch { continue; }
-          if (PROSPECT_SKIP_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) continue;
-          if (isMajorPlatform(r.url) || isOwnContent(r.url, ownLinks)) continue;
-          if (isJoinPageUrl(r.url) || isSearchPageUrl(r.url)) continue;
-          if (!matchesAlias(alias, r.url, r.title)) continue;
-          found.set(r.url, { url: r.url, title: r.title || '', site: host });
-        }
-      } catch (err) {
-        failed++;
-        console.warn(`Prospect scan query failed ("${query}"):`, err.message);
-      }
+    // One alias's searches run side by side, so the website's free scan
+    // (which uses this too) answers in a few seconds.
+    const list = buildTextQueries(alias, [], siteGroups);
+    queries += list.length;
+    const answers = await Promise.all(list.map((query) => searchGoogle(query).catch((err) => {
+      failed++;
+      console.warn(`Prospect scan query failed ("${query}"):`, err.message);
+      return [];
+    })));
+    for (const r of answers.flat()) {
+      if (!r.url || found.has(r.url)) continue;
+      let host;
+      try { host = new URL(r.url).hostname.replace(/^www\./, '').toLowerCase(); } catch { continue; }
+      if (PROSPECT_SKIP_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) continue;
+      if (isMajorPlatform(r.url) || isOwnContent(r.url, ownLinks)) continue;
+      if (isJoinPageUrl(r.url) || isSearchPageUrl(r.url)) continue;
+      if (!matchesAlias(alias, r.url, r.title)) continue;
+      found.set(r.url, { url: r.url, title: r.title || '', site: host });
     }
   }
   return { results: [...found.values()], queries, failed };

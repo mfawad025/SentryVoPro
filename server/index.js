@@ -1671,7 +1671,7 @@ app.post('/api/outreach/opt-out', express.urlencoded({ extended: false }), async
 });
 
 // ---------------- Admin: partner referrals ----------------
-// https://api.sentryvo.com/api/admin/referrals?key=ADMIN_KEY[&code=KITSY][&rate=30][&format=json]
+// https://api.sentryvo.com/api/admin/referrals?key=ADMIN_KEY[&code=KITSY][&rate=20][&format=json]  (rate defaults to 20, or env PARTNER_COMMISSION_RATE)
 // For partners paid by hand (no Lemon Squeezy account): a partner shares
 // https://www.sentryvo.com/?aff=CODE, the site remembers the code for 60
 // days and saves it on the account of anyone who signs up (users.referral_code).
@@ -1685,7 +1685,8 @@ app.get('/api/admin/referrals', async (req, res) => {
   if (!checkAdminKey(req, res)) return;
   try {
     const filter = String(req.query.code || '').trim().toLowerCase();
-    const rate = Math.min(100, Math.max(0, Number(req.query.rate) || 0));
+    const rawRate = req.query.rate !== undefined && req.query.rate !== '' ? Number(req.query.rate) : Number(process.env.PARTNER_COMMISSION_RATE || 20);
+    const rate = Math.min(100, Math.max(0, rawRate || 0));
     const now = Date.now();
     const partners = new Map();
     for (const u of await db.getReferredUsers()) {
@@ -1741,7 +1742,7 @@ app.get('/api/admin/referrals', async (req, res) => {
 <body style="margin:0;background:#F4F2F8;font-family:Arial,sans-serif;color:#1A1530">
 <div style="max-width:900px;margin:30px auto;padding:28px;background:#fff;border-radius:14px;border:1px solid #e3dfeb;overflow-x:auto">
 <h1 style="margin:0 0 6px;color:#D82F74;font-size:1.5rem">Partner referrals</h1>
-<p style="margin:0;color:#5D5677;font-size:.9rem">Clients who signed up through a partner link. "Months" counts from the sign-up date. ${rate ? `Commission uses ${rate}% of each paying client's regular monthly price (the discounted first month is not taken into account).` : 'Add <code>&amp;rate=30</code> to the address to work out a 30% commission (any percentage works).'} Add <code>&amp;code=CODE</code> to show one partner only.</p>
+<p style="margin:0;color:#5D5677;font-size:.9rem">Clients who signed up through a partner link. "Months" counts from the sign-up date. ${rate ? `Commission uses ${rate}% of each paying client's regular monthly price (the discounted first month is not taken into account).` : 'Add <code>&amp;rate=30</code> to the address to work out a commission at another percentage.'} Add <code>&amp;code=CODE</code> to show one partner only.</p>
 ${sections || '<p style="margin-top:24px">No sign-ups with a partner code yet.</p>'}
 </div></body></html>`);
   } catch (err) {

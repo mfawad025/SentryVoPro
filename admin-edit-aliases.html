@@ -18,7 +18,7 @@
   <div class="wrap" style="max-width:640px;">
     <div style="background:var(--paper-2); border:1px solid var(--line); box-shadow:0 30px 60px -40px var(--shadow); border-radius:16px; padding:40px;">
       <span class="eyebrow">Admin Only — Not Linked From Site Navigation</span>
-      <h2 style="margin:8px 0 6px;">Edit a client's aliases</h2>
+      <h2 style="margin:8px 0 6px;">Edit a client's aliases and original links</h2>
       <p style="font-size:.88rem; color:var(--text-low); margin-bottom:28px;">
         Use this to fix or replace a client's monitored stage names/usernames.
         Enter only the plain name itself (e.g. <code>kitsykat</code>) — the scanner
@@ -49,6 +49,13 @@
         </div>
         <button type="button" class="btn btn-primary btn-block" id="save-submit">Save Aliases</button>
         <p class="confirm-note" id="save-status" style="min-height:1.2em; font-size:.82rem; margin-top:12px; text-align:center;"></p>
+
+        <div class="field" style="margin-top:28px; padding-top:28px; border-top:1px solid var(--line);">
+          <label for="client-links">Original links (one per line) — the client's own pages, never reported. This REPLACES the full list</label>
+          <textarea id="client-links" rows="5" placeholder="https://onlyfans.com/kitsykat"></textarea>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" id="links-submit">Save Original Links</button>
+        <p class="confirm-note" id="links-status" style="min-height:1.2em; font-size:.82rem; margin-top:12px; text-align:center;"></p>
       </div>
     </div>
   </div>
@@ -86,6 +93,7 @@
       currentUserId = user.id;
       document.getElementById('client-label').textContent = `${user.name} (${user.email})`;
       document.getElementById('client-aliases').value = (user.aliases || []).filter(Boolean).join(', ');
+      document.getElementById('client-links').value = (user.originalLinks || []).join('\n');
       document.getElementById('edit-panel').style.display = 'block';
       statusEl.textContent = 'Client found — edit the aliases below.';
       statusEl.style.color = 'var(--sage)';
@@ -132,6 +140,33 @@
     } finally {
       btn.disabled = false;
       btn.textContent = 'Save Aliases';
+    }
+  });
+
+  document.getElementById('links-submit').addEventListener('click', async function () {
+    const btn = this;
+    const statusEl = document.getElementById('links-status');
+    const adminKey = document.getElementById('admin-key').value.trim();
+    if (!currentUserId) return;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    statusEl.textContent = '';
+    try {
+      const res = await fetch(`${SENTRYVO_BACKEND_URL}/api/admin/replace-original-links?key=${encodeURIComponent(adminKey)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, links: document.getElementById('client-links').value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save links');
+      statusEl.textContent = `Saved ${data.links.length} link(s).`;
+      statusEl.style.color = 'var(--sage)';
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.style.color = 'var(--rust)';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Original Links';
     }
   });
 </script>

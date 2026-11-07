@@ -1164,6 +1164,27 @@ app.post('/api/admin/replace-aliases', async (req, res) => {
   }
 });
 
+// Replaces a client's list of official links (their own pages, never reported).
+// Body: { userId, links: ["https://...", ...] }  (array, or one link per line)
+app.post('/api/admin/replace-original-links', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const { userId, links } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const user = await db.getUserById(userId);
+    if (!user) return res.status(404).json({ error: `No user found with id ${userId}` });
+    const list = (Array.isArray(links) ? links : String(links || '').split(/[\n,]+/))
+      .map((l) => String(l).trim()).filter(Boolean);
+    const bad = list.find((l) => !/^https?:\/\/[^\s]+\.[^\s]+$/i.test(l));
+    if (bad) return res.status(400).json({ error: `Not a full link (start with https://): ${bad}` });
+    const saved = await db.replaceOriginalLinks(userId, list);
+    res.json({ ok: true, message: `Original links for ${user.email} saved`, links: saved });
+  } catch (err) {
+    console.error('Admin replace-original-links failed:', err.message);
+    res.status(400).json({ error: err.message || 'Could not save links' });
+  }
+});
+
 // Usage: https://api.sentryvo.com/api/admin/find-user?alias=kitsykat&key=YOUR_ADMIN_KEY
 // Searches both aliases and email addresses (partial match, case-insensitive).
 app.get('/api/admin/find-user', async (req, res) => {
@@ -1174,6 +1195,7 @@ app.get('/api/admin/find-user', async (req, res) => {
       return res.status(400).json({ error: 'Add ?alias=searchterm (or ?email=...) to the URL' });
     }
     const users = await db.findUsersByAliasOrEmail(term);
+    for (const u of users) u.originalLinks = await db.getOriginalLinksForUser(u.id);
     res.json({ ok: true, count: users.length, users });
   } catch (err) {
     console.error('Admin find-user failed:', err.message);

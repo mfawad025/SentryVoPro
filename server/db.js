@@ -643,6 +643,26 @@ async function clearFingerprints(userId) {
   return result.rowCount;
 }
 
+// Replaces the client's whole list of official links (admin edit page).
+async function replaceOriginalLinks(userId, urlList) {
+  const clean = [...new Set(urlList.map((u) => String(u || '').trim()).filter(Boolean))];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM original_links WHERE user_id = $1`, [userId]);
+    for (const url of clean) {
+      await client.query(`INSERT INTO original_links (user_id, url) VALUES ($1, $2)`, [userId, url]);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return clean;
+}
+
 async function getOriginalLinksForUser(userId) {
   const result = await pool.query(`SELECT url FROM original_links WHERE user_id = $1`, [userId]);
   return result.rows.map((r) => r.url);
@@ -1022,6 +1042,7 @@ module.exports = {
   getAliasesForUser,
   addOriginalLinks,
   getOriginalLinksForUser,
+  replaceOriginalLinks,
   leakExists,
   insertLeak,
   getLeaksFoundSince,

@@ -17,7 +17,17 @@ async function buildClientStatus() {
     if (!lastScan || Date.now() - lastScan > (scanIntervalHours(u) + 3) * 60 * 60 * 1000) warnings.push('Scan is overdue');
     if (db.isReportDue(u)) warnings.push('Report is due but was not sent (check the logs for "Report failed")');
     const stats = lastScanStats.get(u.id);
-    if (stats && stats.queriesFailed) warnings.push(`${stats.queriesFailed} of ${stats.queriesRun} searches failed in the last scan (Serper credits?)`);
+    if (stats && stats.queriesFailed) {
+      // Say what actually failed: a photo search that Serper could not
+      // open is not a credits problem, and the error text shows which it is.
+      const lensFailed = Math.min(stats.lensFailed || 0, stats.queriesFailed);
+      const otherFailed = stats.queriesFailed - lensFailed;
+      const why = (stats.reasons || []).join(' | ').slice(0, 300);
+      const parts = [];
+      if (otherFailed) parts.push(`${otherFailed} of ${stats.queriesRun} searches failed`);
+      if (lensFailed) parts.push(`${lensFailed} photo search(es) failed`);
+      warnings.push(`${parts.join(', ')} in the last scan${why ? ` — error: ${why}` : ''}`);
+    }
     rows.push({
       name: u.name,
       email: u.email,

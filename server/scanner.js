@@ -935,7 +935,11 @@ async function runDailyScanForUser(user) {
     if (removed) await db.markLeakStatus(leak.id, 'removed');
   }
 
-  lastScanStats.set(user.id, { at: new Date().toISOString(), queriesRun, queriesFailed });
+  lastScanStats.set(user.id, {
+    at: new Date().toISOString(), queriesRun, queriesFailed,
+    lensFailed: lens.failed,
+    reasons: [...new Set(failureReasons)].slice(0, 3),
+  });
 
   const report = await sendReportIfDue(user, scanStart);
   return { user: user.email, ...report, queriesRun, queriesFailed, fingerprintMatches };

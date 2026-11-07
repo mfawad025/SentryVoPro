@@ -100,3 +100,5 @@ Follow-up/escalation notices, impersonator (fake account) search, managed top pl
 - **Retention:** prospects that never signed up are deleted after `PROSPECT_RETENTION_DAYS` (90), with their results and email text; the blocklist stays.
 - **Daily summary email** shows an Outreach line (sent, replies, sign-ups, opt-outs, drafts to review).
 - **Settings:** `OUTREACH_FROM_NAME`, `OUTREACH_FROM_EMAIL`, `OUTREACH_POSTAL_ADDRESS` (required to send), optional `OUTREACH_REPLY_TO`, `OUTREACH_SMTP_HOST/PORT/USER/PASS` (separate sending account; defaults to the SMTP_* one). Use a separate sending domain/subdomain with SPF, DKIM and DMARC so cold email can't hurt client report delivery.
+
+- **Scan failure warning (admin daily email):** shows how many text/image searches failed and how many photo (Lens) searches failed, plus the real error text (first 3 distinct, from `lastScanStats.reasons`). A photo search fails when Serper cannot open the client's image URL; that is not a credits problem. The stats are kept in memory, so they reset when Render restarts.

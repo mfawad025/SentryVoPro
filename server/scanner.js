@@ -589,22 +589,31 @@ async function attemptConsolidatedTakedownNotice(domain, knownEmail, initialLeak
   }
 }
 
-async function recheckLeak(leak) {
+// Is the page really gone? Returns true ONLY when the site clearly says so:
+// HTTP 404/410 on two tries a few seconds apart, or the domain no longer
+// exists (DNS). Everything else (403 "blocked" pages from anti-bot
+// protection, timeouts, connection resets, redirects to login or age-check
+// pages) is "can't tell", so the link stays "DMCA Sent" instead of being
+// wrongly shown as Removed while it is still online.
+const CHECK_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+};
+
+async function checkOnce(url) {
   try {
-    const res = await fetch(leak.url, { method: 'GET', redirect: 'follow', timeout: 10000 });
-    // Very rough heuristic: 404/410/403 or a redirect to a different host
-    // suggests the content is no longer there. Confirm manually for
-    // anything that matters — this is a signal, not proof.
-    const finalHost = new URL(res.url).hostname;
-    const originalHost = new URL(leak.url).hostname;
-    if ([404, 410, 403].includes(res.status) || finalHost !== originalHost) {
-      return true;
-    }
-    return false;
-  } catch {
-    // Unreachable often means taken down (DNS gone, connection refused, etc.)
-    return true;
+    const res = await fetch(url, { method: 'GET', redirect: 'follow', timeout: 15000, headers: CHECK_HEADERS });
+    if (res.status === 404 || res.status === 410) return 'gone';
+    return 'live-or-unknown';
+  } catch (err) {
+    return err && err.code === 'ENOTFOUND' ? 'gone' : 'live-or-unknown';
   }
+}
+
+async function recheckLeak(leak) {
+  if ((await checkOnce(leak.url)) !== 'gone') return false;
+  await new Promise((r) => setTimeout(r, 5000));
+  return (await checkOnce(leak.url)) === 'gone';
 }
 
 async function runDailyScanForUser(user) {

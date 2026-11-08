@@ -1185,6 +1185,23 @@ app.post('/api/admin/replace-original-links', async (req, res) => {
   }
 });
 
+// Puts a client's links marked "Removed" back to "DMCA Sent" so the stricter
+// removal check re-tests them (links that are really gone become Removed again).
+// Usage: https://api.sentryvo.com/api/admin/restore-removed?userId=ID&key=ADMIN_KEY
+app.get('/api/admin/restore-removed', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const userId = req.query?.userId;
+    if (!userId) return res.status(400).json({ error: 'Add ?userId=ID to the URL' });
+    const removed = await db.getLeaksByStatus(userId, 'removed');
+    for (const leak of removed) await db.markLeakStatus(leak.id, 'reported');
+    res.json({ ok: true, restored: removed.length, message: 'They will be re-checked on the next scan.' });
+  } catch (err) {
+    console.error('Admin restore-removed failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Usage: https://api.sentryvo.com/api/admin/find-user?alias=kitsykat&key=YOUR_ADMIN_KEY
 // Searches both aliases and email addresses (partial match, case-insensitive).
 app.get('/api/admin/find-user', async (req, res) => {

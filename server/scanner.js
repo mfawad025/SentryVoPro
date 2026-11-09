@@ -127,6 +127,17 @@ function isSearchPageUrl(url) {
   }
 }
 
+// A site's front page ("https://fapello.com/") holds no specific leaked
+// content, so the free/prospect scan does not show it as a result.
+function isHomePageUrl(url) {
+  try {
+    const u = new URL(url);
+    return (u.pathname === '/' || u.pathname === '') && !u.search;
+  } catch {
+    return false;
+  }
+}
+
 function isJoinPageUrl(url) {
   try {
     return /\/(join|signup|sign-up|register|subscribe|go|out|redirect)(\/|$)/i.test(new URL(url).pathname);
@@ -1003,7 +1014,7 @@ async function scanProspect(aliases, ownLinks = []) {
       try { host = new URL(r.url).hostname.replace(/^www\./, '').toLowerCase(); } catch { continue; }
       if (PROSPECT_SKIP_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) continue;
       if (isMajorPlatform(r.url) || isOwnContent(r.url, ownLinks)) continue;
-      if (isJoinPageUrl(r.url) || isSearchPageUrl(r.url)) continue;
+      if (isJoinPageUrl(r.url) || isSearchPageUrl(r.url) || isHomePageUrl(r.url)) continue;
       if (!matchesAlias(alias, r.url, r.title)) continue;
       found.set(r.url, { url: r.url, title: r.title || '', site: host });
     }

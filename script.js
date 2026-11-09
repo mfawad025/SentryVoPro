@@ -281,6 +281,7 @@ function initFreeScan() {
           (r) => `
           <div style="padding:10px 0; border-top:1px solid var(--line-soft);">
             <a href="${escapeAttr(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer" style="color:var(--text-hi); font-size:.85rem; word-break:break-all;">${escapeHtml(r.title || r.url)}</a>
+            <div style="color:var(--text-low); font-size:.74rem; word-break:break-all; margin-top:2px;">${escapeHtml(shortPageAddress(r.url))}</div>
           </div>`
         )
         .join('');
@@ -313,6 +314,16 @@ function initFreeScan() {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') runScan();
   });
+}
+
+// "https://www.fapello.com/kitsykat/" -> "fapello.com/kitsykat": the exact page, not just the site.
+function shortPageAddress(url) {
+  try {
+    const u = new URL(url);
+    return (u.hostname.replace(/^www\./, '') + u.pathname + u.search).replace(/\/$/, '');
+  } catch (e) {
+    return String(url || '');
+  }
 }
 
 function escapeHtml(str) {

@@ -737,6 +737,25 @@ async function markGoogleSubmitted(userId, leakIds) {
   return result.rowCount;
 }
 
+// Puts "reported"/"removed" links on the given sites back to "found", so the
+// next scan sends a fresh notice for them (to the site's current email on the
+// list). Optional userId limits it to one client. Returns counts per client.
+async function resetLeaksForDomains(domains, userId = null) {
+  const hosts = [...new Set(domains.map((x) => String(x).trim().toLowerCase().replace(/^www\./, '')).filter(Boolean))];
+  if (!hosts.length) return [];
+  const pattern = '^https?://([^/]*\\.)?(' + hosts.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(/|$|\\?)';
+  const params = [pattern];
+  let where = `status IN ('reported','removed') AND url ~* $1`;
+  if (userId) { params.push(userId); where += ` AND user_id = $2`; }
+  const result = await pool.query(
+    `UPDATE leaks SET status = 'found', reported_at = NULL, removed_at = NULL WHERE ${where} RETURNING user_id`,
+    params
+  );
+  const counts = new Map();
+  for (const r of result.rows) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
+  return [...counts.entries()].map(([user, links]) => ({ userId: user, links }));
+}
+
 async function markLeakStatus(id, status) {
   const column = status === 'reported' ? 'reported_at' : status === 'removed' ? 'removed_at' : null;
   if (column) {
@@ -1043,6 +1062,7 @@ module.exports = {
   addOriginalLinks,
   getOriginalLinksForUser,
   replaceOriginalLinks,
+  resetLeaksForDomains,
   leakExists,
   insertLeak,
   getLeaksFoundSince,

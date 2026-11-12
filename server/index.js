@@ -1330,6 +1330,23 @@ app.get('/api/admin/reset-password', async (req, res) => {
 });
 
 // ---------------- Site contact email lookup (manually verified) ----------------
+// Re-report: puts reported/removed links on the listed sites back to "found" so the
+// next scan sends new notices to those sites' current emails (one notice per site).
+// Check the email list first. Then run /api/scan/run-now to send right away.
+// Usage: https://api.sentryvo.com/api/admin/rereport?domains=fapello.com,nudostar.com[&userId=ID]&key=YOUR_ADMIN_KEY
+app.get('/api/admin/rereport', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const domains = String(req.query?.domains || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (!domains.length) return res.status(400).json({ error: 'Add ?domains=site1.com,site2.com to the URL' });
+    const reset = await db.resetLeaksForDomains(domains, req.query?.userId || null);
+    res.json({ ok: true, domains, reset, message: 'Run /api/scan/run-now to send the new notices now, or wait for the next scan.' });
+  } catch (err) {
+    console.error('Admin rereport failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Usage: https://api.sentryvo.com/api/admin/site-emails/list?key=YOUR_ADMIN_KEY
 app.get('/api/admin/site-emails/list', async (req, res) => {
   if (!checkAdminKey(req, res)) return;

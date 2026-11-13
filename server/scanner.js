@@ -432,8 +432,8 @@ async function attemptTakedownNotice(leak, user, originalLinks) {
   // copyright reports through their own forms, so route this to manual
   // review instead. (Domains are handled by isMajorPlatform; this catches
   // media/CDN hosts that resolve to the platform's own network.)
-  const BIG_PLATFORM_ORG = /reddit|twitter|\bx corp|facebook|meta platforms|instagram|tiktok|bytedance|pinterest|snap inc|tumblr|linkedin/i;
-  const BIG_PLATFORM_EMAIL = /@([a-z0-9-]+\.)*(reddit|redditinc|twitter|x|fb|facebook|meta|instagram|tiktok|bytedance|pinterest|snap|tumblr|linkedin)\.com$/i;
+  const BIG_PLATFORM_ORG = /reddit|twitter|\bx corp|facebook|meta platforms|instagram|tiktok|bytedance|pinterest|snap inc|tumblr|linkedin|bluesky|discord|twitch|telegram|vimeo/i;
+  const BIG_PLATFORM_EMAIL = /@([a-z0-9-]+\.)*(reddit|redditinc|twitter|x|fb|facebook|meta|instagram|tiktok|bytedance|pinterest|snap|tumblr|linkedin|bsky|discord|twitch|telegram|vimeo)\.(com|app|social|org|tv|me)$/i;
   if (BIG_PLATFORM_ORG.test(hostingOrg || '') || targetEmails.some((e) => BIG_PLATFORM_EMAIL.test(e))) {
     return { sent: false, reason: 'major_platform' };
   }
@@ -1013,7 +1013,10 @@ async function scanProspect(aliases, ownLinks = []) {
       let host;
       try { host = new URL(r.url).hostname.replace(/^www\./, '').toLowerCase(); } catch { continue; }
       if (PROSPECT_SKIP_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) continue;
-      if (isMajorPlatform(r.url) || isOwnContent(r.url, ownLinks)) continue;
+      // Telegram stays in the free/prospect scan (it is a main leak place);
+      // other big platforms are left out.
+      const isTelegram = ['t.me', 'telegram.me', 'telegra.ph'].some((d) => host === d || host.endsWith(`.${d}`));
+      if ((isMajorPlatform(r.url) && !isTelegram) || isOwnContent(r.url, ownLinks)) continue;
       if (isJoinPageUrl(r.url) || isSearchPageUrl(r.url) || isHomePageUrl(r.url)) continue;
       if (!matchesAlias(alias, r.url, r.title)) continue;
       found.set(r.url, { url: r.url, title: r.title || '', site: host });

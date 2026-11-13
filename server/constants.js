@@ -46,9 +46,35 @@ const MAJOR_PLATFORM_REPORT_LINKS = {
   'snapchat.com': 'https://values.snap.com/en-US/report/copyright',
   'sc-cdn.net': 'https://values.snap.com/en-US/report/copyright',
   'threads.net': 'https://help.instagram.com/contact/372592039493408',
+  // Bluesky, Discord, Twitch, Telegram and Vimeo: also never emailed
+  // automatically; they go to manual review with the platform's own policy
+  // page (the page explains how to send a copyright report).
+  'bsky.app': 'https://bsky.social/about/support/copyright',
+  'bsky.social': 'https://bsky.social/about/support/copyright',
+  'bsky.network': 'https://bsky.social/about/support/copyright',
+  'discord.com': 'https://support.discord.com/hc/articles/4410339349655',
+  'discord.gg': 'https://support.discord.com/hc/articles/4410339349655',
+  'discordapp.com': 'https://support.discord.com/hc/articles/4410339349655',
+  'discordapp.net': 'https://support.discord.com/hc/articles/4410339349655',
+  'twitch.tv': 'https://legal.twitch.com/legal/dmca-guidelines',
+  'vimeo.com': 'https://vimeo.com/help/violations',
+  // Telegram takes copyright reports by email (public channels only).
+  't.me': 'mailto:dmca@telegram.org',
+  'telegram.me': 'mailto:dmca@telegram.org',
+  'telegram.org': 'mailto:dmca@telegram.org',
+  'telegra.ph': 'mailto:dmca@telegram.org',
 };
 
-const MAJOR_PLATFORM_DOMAINS = Object.keys(MAJOR_PLATFORM_REPORT_LINKS);
+// More big platforms that must never get an automatic email. No reliable
+// report form is known for these, so the digest shows "No known form" and
+// you report them by hand on the platform.
+const MAJOR_PLATFORMS_NO_FORM = [
+  'dailymotion.com', 'flickr.com', 'imgur.com', 'medium.com', 'quora.com',
+  'whatsapp.com', 'wa.me', 'vk.com', 'ok.ru', 'weibo.com', 'mastodon.social',
+  'substack.com', 'patreon.com', 'onlyfans.com', 'fansly.com',
+];
+
+const MAJOR_PLATFORM_DOMAINS = [...Object.keys(MAJOR_PLATFORM_REPORT_LINKS), ...MAJOR_PLATFORMS_NO_FORM];
 
 // Checks whether a URL belongs to one of the major platforms above —
 // matches the exact domain or any subdomain of it (e.g. m.youtube.com).
@@ -67,7 +93,7 @@ function getMajorPlatformReportLink(url) {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
     const match = MAJOR_PLATFORM_DOMAINS.find((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
-    return match ? MAJOR_PLATFORM_REPORT_LINKS[match] : null;
+    return match ? (MAJOR_PLATFORM_REPORT_LINKS[match] || null) : null;
   } catch {
     return null;
   }

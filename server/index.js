@@ -65,6 +65,15 @@ app.post(
 
       const event = JSON.parse(req.body.toString('utf8'));
       const eventName = event?.meta?.event_name;
+
+      // Test-mode orders are fake payments. They must never activate an
+      // account, so they are ignored unless LEMONSQUEEZY_ALLOW_TEST_MODE=true
+      // (only for deliberate testing).
+      if (event?.meta?.test_mode === true && process.env.LEMONSQUEEZY_ALLOW_TEST_MODE !== 'true') {
+        console.warn(`Lemon Squeezy webhook ${eventName}: ignored, it is a TEST MODE event`);
+        return res.status(200).json({ received: true, note: 'test mode event ignored' });
+      }
+
       const checkoutRef = event?.meta?.custom_data?.user_id;
       const isSubscription = event?.data?.type === 'subscriptions';
       const subscriptionId = isSubscription ? String(event.data.id) : null;

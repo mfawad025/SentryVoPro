@@ -1380,10 +1380,25 @@ app.get('/api/admin/site-emails/add', async (req, res) => {
       return res.status(400).json({ error: 'Add both ?domain=example.com and &email=dmca@example.com to the URL' });
     }
     await db.upsertSiteContactEmail(domain, email);
-    res.json({ ok: true, message: `Saved: ${domain} -> ${email}` });
+    res.json({ ok: true, message: `Saved: ${domain} -> ${db.cleanSiteEmail(email)}` });
   } catch (err) {
     console.error('Admin site-emails/add failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Same as /add but sent in the request body, so characters like "+" arrive
+// intact. Used by admin-site-emails.html. Body: { domain, email }
+app.post('/api/admin/site-emails/save', async (req, res) => {
+  if (!checkAdminKey(req, res)) return;
+  try {
+    const domain = String(req.body?.domain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+    if (!domain || !domain.includes('.')) return res.status(400).json({ error: 'Enter a website like example.com' });
+    await db.upsertSiteContactEmail(domain, req.body?.email);
+    res.json({ ok: true, domain, email: db.cleanSiteEmail(req.body?.email) });
+  } catch (err) {
+    console.error('Admin site-emails/save failed:', err.message);
+    res.status(400).json({ error: err.message });
   }
 });
 

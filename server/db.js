@@ -168,6 +168,10 @@ async function initSchema() {
       email TEXT NOT NULL,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+    -- A "+" typed in a web address turns into a space, so entries added that
+    -- way lost it ("name dmca@gmail.com"). An email never contains a space,
+    -- so put the "+" back.
+    UPDATE site_contact_emails SET email = regexp_replace(btrim(email), '\s+', '+', 'g') WHERE email ~ '\s';
 
     -- One free homepage scan per visitor, for life. visitor_hash is a
     -- salted SHA-256 of the visitor's IP address (see index.js) — the raw
@@ -520,12 +524,24 @@ async function deletePasswordResetToken(token) {
 }
 
 // ---------- Manually-verified site contact emails ----------
-async function getSiteContactEmail(domain) {
-  const result = await pool.query(`SELECT * FROM site_contact_emails WHERE domain = $1`, [domain]);
-  return result.rows[0] || null;
+// Cleans an email typed or sent through a web address: a space there is a
+// lost "+" (nudogram+dmca@gmail.com arrives as "nudogram dmca@gmail.com").
+// Returns '' when the result is not a valid-looking email address.
+function cleanSiteEmail(raw) {
+  const email = String(raw || '').trim().replace(/\s+/g, '+');
+  return /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email) ? email : '';
 }
 
-async function upsertSiteContactEmail(domain, email) {
+async function getSiteContactEmail(domain) {
+  const result = await pool.query(`SELECT * FROM site_contact_emails WHERE domain = $1`, [domain]);
+  const row = result.rows[0] || null;
+  if (row) row.email = String(row.email).trim().replace(/\s+/g, '+');
+  return row;
+}
+
+async function upsertSiteContactEmail(domain, rawEmail) {
+  const email = cleanSiteEmail(rawEmail);
+  if (!email) throw new Error(`"${rawEmail}" is not a valid email address`);
   await pool.query(
     `INSERT INTO site_contact_emails (domain, email, updated_at) VALUES ($1, $2, NOW())
      ON CONFLICT (domain) DO UPDATE SET email = $2, updated_at = NOW()`,
@@ -565,7 +581,7 @@ async function getLeakSiteDomains(limit = 100) {
 
 async function listSiteContactEmails() {
   const result = await pool.query(`SELECT * FROM site_contact_emails ORDER BY domain ASC`);
-  return result.rows;
+  return result.rows.map((r) => ({ ...r, email: String(r.email).trim().replace(/\s+/g, '+') }));
 }
 
 // ---------- Aliases ----------
@@ -1063,6 +1079,7 @@ module.exports = {
   getOriginalLinksForUser,
   replaceOriginalLinks,
   resetLeaksForDomains,
+  cleanSiteEmail,
   leakExists,
   insertLeak,
   getLeaksFoundSince,

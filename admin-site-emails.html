@@ -47,7 +47,7 @@
         </div>
 
         <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:10px;">
-          <input type="text" id="filter" placeholder="Search by website or email" style="flex:1; min-width:200px;" autocomplete="off">
+          <input type="text" id="filter" placeholder="Search by website or email" style="flex:1; min-width:200px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; font:inherit; color:inherit;" autocomplete="off">
           <span id="count" style="font-size:.85rem; color:var(--text-low);"></span>
         </div>
 
@@ -104,7 +104,7 @@
       const changed = e.updated_at ? new Date(e.updated_at).toLocaleDateString() : '';
       return `<tr style="border-bottom:1px solid var(--line);">
         <td style="padding:8px; word-break:break-all;"><strong>${esc(e.domain)}</strong></td>
-        <td style="padding:8px;"><input type="text" value="${esc(e.email)}" data-domain="${esc(e.domain)}" class="email-input" style="width:100%; ${bad ? 'border-color:var(--rust);' : ''}" autocomplete="off">${bad ? '<div style="color:var(--rust); font-size:.75rem;">Not a valid email</div>' : ''}</td>
+        <td style="padding:8px;"><input type="text" value="${esc(e.email)}" data-domain="${esc(e.domain)}" class="email-input" style="width:100%; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; font:inherit; color:inherit; ${bad ? 'border-color:var(--rust);' : ''}" autocomplete="off">${bad ? '<div style="color:var(--rust); font-size:.75rem;">Not a valid email</div>' : ''}</td>
         <td style="padding:8px; white-space:nowrap; color:var(--text-low);">${esc(changed)}</td>
         <td style="padding:8px; white-space:nowrap;">
           <button type="button" class="btn btn-primary" data-save="${esc(e.domain)}" style="padding:6px 14px;">Save</button>

@@ -107,6 +107,10 @@ async function initSchema() {
     -- without this, the same still-open item would get re-sent every
     -- single day forever. NULL means "not yet surfaced to the admin."
     ALTER TABLE leaks ADD COLUMN IF NOT EXISTS admin_digest_sent_at TIMESTAMPTZ;
+    -- How many takedown notices have been sent for this link (the weekly
+    -- re-report adds one each time). Links reported before this existed count as 1.
+    ALTER TABLE leaks ADD COLUMN IF NOT EXISTS report_count INTEGER NOT NULL DEFAULT 0;
+    UPDATE leaks SET report_count = 1 WHERE status IN ('reported', 'removed') AND report_count = 0 AND reported_at IS NOT NULL;
 
     -- Google's result snippet, kept so a leak can be re-checked for alias
     -- relevance later. Leaks that fail that check get status 'dismissed'
@@ -775,10 +779,53 @@ async function resetLeaksForDomains(domains, userId = null) {
 async function markLeakStatus(id, status) {
   const column = status === 'reported' ? 'reported_at' : status === 'removed' ? 'removed_at' : null;
   if (column) {
-    await pool.query(`UPDATE leaks SET status = $1, ${column} = NOW() WHERE id = $2`, [status, id]);
+    const count = status === 'reported' ? ', report_count = report_count + 1' : '';
+    await pool.query(`UPDATE leaks SET status = $1, ${column} = NOW()${count} WHERE id = $2`, [status, id]);
   } else {
     await pool.query(`UPDATE leaks SET status = $1 WHERE id = $2`, [status, id]);
   }
+}
+
+// Weekly re-report: links reported `days` or more ago that are still there,
+// and have had fewer than `maxReports` notices. Oldest first, in batches.
+async function getStaleReportedLeaks(userId, days, maxReports, limit = 100) {
+  const result = await pool.query(
+    `SELECT * FROM leaks
+     WHERE user_id = $1 AND status = 'reported'
+       AND reported_at < NOW() - make_interval(days => $2::int)
+       AND report_count < $3
+     ORDER BY reported_at ASC LIMIT $4`,
+    [userId, days, maxReports, limit]
+  );
+  return result.rows;
+}
+
+// Back to "found" so the same scan sends a new notice. reported_at stays
+// until the new notice goes out (then it is set to now).
+async function requeueLeak(id) {
+  await pool.query(`UPDATE leaks SET status = 'found' WHERE id = $1 AND status = 'reported'`, [id]);
+}
+
+// Google weekly repeat: links already put in the admin's digest `days` or
+// more ago that are still there. Putting them back in the digest queue also
+// clears "submitted to Google".
+async function getStaleDigestLeaks(userId, days, limit = 100) {
+  const result = await pool.query(
+    `SELECT * FROM leaks
+     WHERE user_id = $1 AND status NOT IN ('removed', 'dismissed')
+       AND source IN ('serper_web', 'serper_image', 'serper_lens', 'search_expand')
+       AND admin_digest_sent_at IS NOT NULL
+       AND admin_digest_sent_at < NOW() - make_interval(days => $2::int)
+       AND (google_submitted_at IS NULL OR google_submitted_at < NOW() - make_interval(days => $2::int))
+     ORDER BY admin_digest_sent_at ASC LIMIT $3`,
+    [userId, days, limit]
+  );
+  return result.rows;
+}
+
+async function requeueForDigest(leakIds) {
+  if (!leakIds.length) return;
+  await pool.query(`UPDATE leaks SET admin_digest_sent_at = NULL, google_submitted_at = NULL WHERE id = ANY($1::int[])`, [leakIds]);
 }
 
 async function setLeakHostingProvider(id, hostingProvider) {
@@ -1079,6 +1126,10 @@ module.exports = {
   getOriginalLinksForUser,
   replaceOriginalLinks,
   resetLeaksForDomains,
+  getStaleReportedLeaks,
+  requeueLeak,
+  getStaleDigestLeaks,
+  requeueForDigest,
   cleanSiteEmail,
   leakExists,
   insertLeak,

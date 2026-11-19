@@ -462,9 +462,11 @@ async function attemptTakedownNotice(leak, user, originalLinks) {
     ? `The copyrighted work at issue is original content created by ${user.name}. Representative example(s) of the original, authorized work can be found at:\n${originalLinks.join('\n')}`
     : `The copyrighted work at issue is original content created by ${user.name}.`;
 
-  const subject = `DMCA Takedown Notice — ${leak.url}`;
+  const followUp = (leak.report_count || 0) > 0;
+  const subject = `${followUp ? 'Reminder: ' : ''}DMCA Takedown Notice — ${leak.url}`;
   const body = [
     `This is a formal DMCA takedown notice under 17 U.S.C. §512.`,
+    ...(followUp ? [``, `This is a follow-up to our earlier notice(s). The content listed below is still accessible.`] : []),
     ``,
     `I am ${agentName}, submitting this notice as the authorized agent acting on behalf of the copyright owner, ${user.name}, regarding copyrighted content published without authorization at the following URL:`,
     leak.url,
@@ -561,9 +563,11 @@ async function attemptConsolidatedTakedownNotice(domain, knownEmail, initialLeak
     ? `The copyrighted work at issue is original content created by ${user.name}. Representative example(s) of the original, authorized work can be found at:\n${originalLinks.join('\n')}`
     : `The copyrighted work at issue is original content created by ${user.name}.`;
 
-  const subject = `DMCA Takedown Notice — ${urlList.length} item(s) on ${domain}`;
+  const followUp = leaksOnDomainHasReminder(initialLeaks);
+  const subject = `${followUp ? 'Reminder: ' : ''}DMCA Takedown Notice — ${urlList.length} item(s) on ${domain}`;
   const body = [
     `This is a formal DMCA takedown notice under 17 U.S.C. §512.`,
+    ...(followUp ? [``, `This is a follow-up to our earlier notice(s). The content listed below is still accessible.`] : []),
     ``,
     `I am ${agentName}, submitting this notice as the authorized agent acting on behalf of the copyright owner, ${user.name}, regarding copyrighted content published without authorization at the following URL(s) on ${domain}:`,
     ``,
@@ -625,6 +629,43 @@ async function recheckLeak(leak) {
   if ((await checkOnce(leak.url)) !== 'gone') return false;
   await new Promise((r) => setTimeout(r, 5000));
   return (await checkOnce(leak.url)) === 'gone';
+}
+
+function leaksOnDomainHasReminder(leaks) {
+  return (leaks || []).some((l) => (l.report_count || 0) > 0);
+}
+
+// Weekly repeat. A link that was reported REREPORT_AFTER_DAYS (7) or more
+// days ago and is still online gets a fresh notice (up to REREPORT_MAX notices
+// per link, default 8), and is put back in the admin's Google delisting list.
+// A link that is clearly gone is marked Removed instead.
+const REREPORT_AFTER_DAYS = Number(process.env.REREPORT_AFTER_DAYS || 7);
+const REREPORT_MAX = Number(process.env.REREPORT_MAX || 8);
+
+async function requeueStaleReports(user) {
+  let requeued = 0;
+  for (const leak of await db.getStaleReportedLeaks(user.id, REREPORT_AFTER_DAYS, REREPORT_MAX)) {
+    if (await recheckLeak(leak)) {
+      await db.markLeakStatus(leak.id, 'removed');
+    } else {
+      await db.requeueLeak(leak.id);
+      requeued++;
+    }
+  }
+  return requeued;
+}
+
+async function requeueStaleGoogleLinks(user) {
+  const again = [];
+  for (const leak of await db.getStaleDigestLeaks(user.id, REREPORT_AFTER_DAYS)) {
+    if (await recheckLeak(leak)) {
+      if (leak.status === 'reported') await db.markLeakStatus(leak.id, 'removed');
+    } else {
+      again.push(leak.id);
+    }
+  }
+  await db.requeueForDigest(again);
+  return again.length;
 }
 
 async function runDailyScanForUser(user) {
@@ -880,6 +921,14 @@ async function runDailyScanForUser(user) {
     if (isOwnContent(leak.url, originalLinks) || failsMatchRules(leak, aliases)) {
       await db.markLeakStatus(leak.id, 'dismissed');
     }
+  }
+  // Weekly repeat of reports for links that are still online.
+  try {
+    const again = await requeueStaleReports(user);
+    const google = await requeueStaleGoogleLinks(user);
+    if (again || google) console.log(`Scan for ${user.email}: ${again} link(s) queued for a repeat notice, ${google} for Google again`);
+  } catch (err) {
+    console.warn(`Weekly repeat failed for ${user.email}:`, err.message);
   }
   const pendingLeaks = await db.getLeaksByStatus(user.id, 'found');
   const newlyFound = [];
